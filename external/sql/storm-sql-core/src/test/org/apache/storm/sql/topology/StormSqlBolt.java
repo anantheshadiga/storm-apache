@@ -78,11 +78,11 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
         Values values = createValues(input);
         ctx.emit(values);
         log.info("++++++++ EMITTED VALUES: [{}]", input);
-        if (!buffer.isEmpty()) {
+        /*if (!buffer.isEmpty()) {
             log.info("++++++++ Contents of buffer {}", buffer);
             collector.emit(input, values);
             buffer.remove();
-        }
+        }*/
         collector.ack(input);
     }
 
@@ -112,8 +112,9 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
     private ChannelHandler handler =  new ChannelHandler() {
         @Override
         public void dataReceived(ChannelContext ctx, Values data) {
-            log.info("++++++++ Data Received {}", data);
-            buffer.add(data);
+//            log.info("++++++++ Data Received {}", data);
+//            buffer.add(data);
+            collector.emit(data);
         }
 
         @Override
