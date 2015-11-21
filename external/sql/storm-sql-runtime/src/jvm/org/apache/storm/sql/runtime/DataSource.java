@@ -19,11 +19,13 @@
  */
 package org.apache.storm.sql.runtime;
 
+import java.io.Serializable;
+
 /**
  * A DataSource ingests data in StormSQL. It provides a series of tuple to
  * the downstream {@link ChannelHandler}.
  *
  */
-public interface DataSource {
+public interface DataSource extends Serializable {
   void open(ChannelContext ctx);
 }

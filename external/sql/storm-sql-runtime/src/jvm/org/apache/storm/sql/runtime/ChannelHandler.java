@@ -21,11 +21,13 @@ package org.apache.storm.sql.runtime;
 
 import backtype.storm.tuple.Values;
 
+import java.io.Serializable;
+
 /**
  * DataListener provides an event-driven interface for the user to process
  * series of events.
  */
-public interface ChannelHandler {
+public interface ChannelHandler extends Serializable {
   void dataReceived(ChannelContext ctx, Values data);
 
   /**

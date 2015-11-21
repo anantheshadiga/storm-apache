@@ -43,9 +43,9 @@ public class StormSqlFilteredBolt extends BaseRichBolt {
     @Override
     public void execute(Tuple input) {
         if (input.getSourceComponent().equals(StormSqlTopology.STORM_SQL_BOLT)) {
-            log.debug("++++++++ RECEIVED FILTERED TUPLE: [{}]", input);
+            log.info("++++++++ RECEIVED FILTERED TUPLE: [{}]", input);
         } else {
-            log.debug("++++++++ RECEIVED TUPLE: [{}]", input);
+            log.info("++++++++ RECEIVED TUPLE: [{}]", input);
         }
         collector.emit(input, new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2)));
         collector.ack(input);

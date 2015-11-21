@@ -21,7 +21,9 @@ package org.apache.storm.sql.runtime;
 
 import backtype.storm.tuple.Values;
 
-public interface ChannelContext {
+import java.io.Serializable;
+
+public interface ChannelContext extends Serializable {
   /**
    * Emit data to the next stage of the data pipeline.
    */

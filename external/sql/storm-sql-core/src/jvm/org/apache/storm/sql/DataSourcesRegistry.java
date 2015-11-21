@@ -59,7 +59,7 @@ public class DataSourcesRegistry {
   }
 
   @VisibleForTesting
-  static Map<String, DataSourcesProvider> providerMap() {
+  public static Map<String, DataSourcesProvider> providerMap() {
     return providers;
   }
 }

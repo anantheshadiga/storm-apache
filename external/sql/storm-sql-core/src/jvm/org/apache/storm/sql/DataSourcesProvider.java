@@ -20,11 +20,12 @@ package org.apache.storm.sql;
 
 import org.apache.storm.sql.runtime.DataSource;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 
-public interface DataSourcesProvider {
+public interface DataSourcesProvider extends Serializable {
   /**
    * @return the scheme of the data source
    */
