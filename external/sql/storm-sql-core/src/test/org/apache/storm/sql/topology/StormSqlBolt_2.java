@@ -53,9 +53,9 @@ public class StormSqlBolt_2 extends BaseRichBolt {
     public StormSqlBolt_2() {
         wrapper = new Wrapper();
         // Step 1 && Step 2
-        MyDataSource dataSource = new MyDataSource(wrapper, null);
+        MyDataSource dataSource = new MyDataSource(wrapper);
         wrapper.setDataSource(dataSource);
-        MyChannelHandler channelHandler = new MyChannelHandler(dataSource.getCtx());
+        MyChannelHandler channelHandler = new MyChannelHandler(wrapper);
         // Step 3
         wrapper.setChannelHandler(channelHandler);
         // Step 4
@@ -124,8 +124,8 @@ public class StormSqlBolt_2 extends BaseRichBolt {
         public boolean eval(Tuple input) {
             Values values = createValues(input);
             ctx.emit(values);
-            boolean evals = evaluates;      // This value gets set synchronously in ChannelHandler
-            evaluates = false;
+            boolean evals = evaluates;      // This value gets set synchronously in a callback in ChannelHandler
+            evaluates = false;              // reset
             return evals;
         }
 
@@ -193,16 +193,14 @@ public class StormSqlBolt_2 extends BaseRichBolt {
 
     class MyDataSource implements DataSource {
         private Wrapper wrapper;
-        private ChannelHandler channelHandler;
 
-        public MyDataSource(Wrapper wrapper, ChannelHandler channelHandler) {
+        public MyDataSource(Wrapper wrapper) {
             this.wrapper = wrapper;
-            this.channelHandler = channelHandler;
         }
 
         @Override
         public void open(ChannelContext ctx) {
-            wrapper.setCtx(new SpecialChannelContext(ctx, channelHandler));    //TODO: null param
+            wrapper.setCtx(new SpecialChannelContext(ctx));    //TODO: null param
         }
 
         public ChannelContext getCtx() {    //TODO: Do I need
@@ -210,28 +208,17 @@ public class StormSqlBolt_2 extends BaseRichBolt {
         }
     }
 
+    //TODO: probably don't even need this
     class SpecialChannelContext implements ChannelContext {
         ChannelContext parent;
-        private ChannelHandler channelHandler;
-        private boolean notMatching;     // tuple that gets filtered out
 
-        public SpecialChannelContext(ChannelContext parent, ChannelHandler channelHandler) {
+        public SpecialChannelContext(ChannelContext parent) {
             this.parent = parent;
-            this.channelHandler = channelHandler;
         }
 
         @Override
         public void emit(Values data) {
-            notMatching = true;
             parent.emit(data);
-        }
-
-        public boolean isNotMatching() {
-            return notMatching;
-        }
-
-        public void setNotMatching(boolean notMatching) {
-            this.notMatching = notMatching;
         }
 
         @Override
@@ -241,15 +228,10 @@ public class StormSqlBolt_2 extends BaseRichBolt {
     // ==========
 
     class MyChannelHandler implements ChannelHandler {
-        ChannelContext channelContext;
         private Wrapper wrapper;
 
         public MyChannelHandler(Wrapper wrapper) {
             this.wrapper = wrapper;
-        }
-
-        public MyChannelHandler(ChannelContext channelContext) {
-            this.channelContext = channelContext;
         }
 
         @Override
