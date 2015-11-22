@@ -53,10 +53,10 @@ public class StormSqlBolt_2 extends BaseRichBolt {
     public StormSqlBolt_2() {
         wrapper = new Wrapper();
         // Step 1 && Step 2
-        MyDataSource dataSource = new MyDataSource(wrapper);
+        MyDataSource dataSource = new MyDataSource(wrapper, null);
         wrapper.setDataSource(dataSource);
+        MyChannelHandler channelHandler = new MyChannelHandler(dataSource.getCtx());
         // Step 3
-        MyChannelHandler channelHandler = new MyChannelHandler();
         wrapper.setChannelHandler(channelHandler);
         // Step 4
         wrapper.setDataSourceProvider(new MyDataSourcesProvider(dataSource));
@@ -68,7 +68,7 @@ public class StormSqlBolt_2 extends BaseRichBolt {
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
         this.collector = collector;
-        wrapper.compileQuery();
+//        wrapper.compileQuery();
     }
 
 
@@ -116,6 +116,7 @@ public class StormSqlBolt_2 extends BaseRichBolt {
         private ChannelContext ctx;     // step 2 - Data Source sets context
         private ChannelHandler channelHandler; // step 3
         private DataSourcesProvider dataSourceProvider; // step 4
+        private boolean evaluates;
 
         public Wrapper() {
         }
@@ -123,15 +124,14 @@ public class StormSqlBolt_2 extends BaseRichBolt {
         public boolean eval(Tuple input) {
             Values values = createValues(input);
             ctx.emit(values);
-
-            return true;    //TODO
+            boolean evals = evaluates;      // This value gets set synchronously in ChannelHandler
+            evaluates = false;
+            return evals;
         }
 
         public void execute(Tuple tuple, OutputCollector outputCollector) {
             outputCollector.emit(tuple, createValues(tuple));
         }
-
-
 
         private Values createValues(Tuple input) {
             return new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2));
@@ -181,18 +181,28 @@ public class StormSqlBolt_2 extends BaseRichBolt {
         public void setChannelHandler(ChannelHandler channelHandler) {
             this.channelHandler = channelHandler;
         }
+
+        public void setEvaluates(boolean evaluates) {
+            this.evaluates = evaluates;
+        }
+
+        public boolean isEvaluates() {
+            return evaluates;
+        }
     }
 
     class MyDataSource implements DataSource {
         private Wrapper wrapper;
+        private ChannelHandler channelHandler;
 
-        public MyDataSource(Wrapper wrapper) {
+        public MyDataSource(Wrapper wrapper, ChannelHandler channelHandler) {
             this.wrapper = wrapper;
+            this.channelHandler = channelHandler;
         }
 
         @Override
         public void open(ChannelContext ctx) {
-            wrapper.setCtx(new SpecialChannelContext(ctx, null));    //TODO: null param
+            wrapper.setCtx(new SpecialChannelContext(ctx, channelHandler));    //TODO: null param
         }
 
         public ChannelContext getCtx() {    //TODO: Do I need
@@ -203,6 +213,7 @@ public class StormSqlBolt_2 extends BaseRichBolt {
     class SpecialChannelContext implements ChannelContext {
         ChannelContext parent;
         private ChannelHandler channelHandler;
+        private boolean notMatching;     // tuple that gets filtered out
 
         public SpecialChannelContext(ChannelContext parent, ChannelHandler channelHandler) {
             this.parent = parent;
@@ -211,40 +222,47 @@ public class StormSqlBolt_2 extends BaseRichBolt {
 
         @Override
         public void emit(Values data) {
+            notMatching = true;
             parent.emit(data);
         }
 
-        @Override
-        public void fireChannelInactive() {
-
+        public boolean isNotMatching() {
+            return notMatching;
         }
+
+        public void setNotMatching(boolean notMatching) {
+            this.notMatching = notMatching;
+        }
+
+        @Override
+        public void fireChannelInactive() { }
     }
 
     // ==========
 
     class MyChannelHandler implements ChannelHandler {
-//        ChannelContext channelContext;
-//
-//        public MyChannelHandler(ChannelContext channelContext) {
-//            this.channelContext = channelContext;
-//        }
+        ChannelContext channelContext;
+        private Wrapper wrapper;
+
+        public MyChannelHandler(Wrapper wrapper) {
+            this.wrapper = wrapper;
+        }
+
+        public MyChannelHandler(ChannelContext channelContext) {
+            this.channelContext = channelContext;
+        }
 
         @Override
         public void dataReceived(ChannelContext ctx, Values data) {
             log.info("++++++++ Data Received {}", data);
-//            buffer.add(data);
-            collector.emit(data);
+            wrapper.setEvaluates(true);
         }
 
         @Override
-        public void channelInactive(ChannelContext ctx) {
-
-        }
+        public void channelInactive(ChannelContext ctx) { }
 
         @Override
-        public void exceptionCaught(Throwable cause) {
-
-        }
+        public void exceptionCaught(Throwable cause) { }
     }
 
     // ==========
