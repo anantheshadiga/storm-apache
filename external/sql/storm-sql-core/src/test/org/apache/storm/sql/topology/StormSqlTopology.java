@@ -36,7 +36,8 @@ public class StormSqlTopology {
     public static void testTopology() throws Exception {
         TopologyBuilder builder = new TopologyBuilder();
         builder.setSpout(STORM_SQL_SPOUT, new StormSqlSpout());
-        builder.setBolt(STORM_SQL_BOLT, new StormSqlBolt()).shuffleGrouping(STORM_SQL_SPOUT);
+        builder.setBolt(STORM_SQL_BOLT, new StormSqlBolt_2()).shuffleGrouping(STORM_SQL_SPOUT);
+//        builder.setBolt(STORM_SQL_BOLT, new StormSqlBolt()).shuffleGrouping(STORM_SQL_SPOUT);
         builder.setBolt(STORM_SQL_FILTERED_BOLT, new StormSqlFilteredBolt()).shuffleGrouping(STORM_SQL_BOLT);
 
         StormTopology sqlTopology = builder.createTopology();
@@ -48,6 +49,8 @@ public class StormSqlTopology {
     private static Config getConfig() {
         final Config config = new Config();
         config.setDebug(true);
+        config.setMaxTaskParallelism(1);
+        config.setNumWorkers(1);
         return config;
     }
 }

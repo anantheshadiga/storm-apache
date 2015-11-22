@@ -62,7 +62,7 @@ public class StormSqlSpout extends BaseRichSpout {
     }
 
     public Fields getOutputFields() {
-        return new Fields("F1", "F2", "F3");
+        return new Fields("F2", "F1", "F3");
     }
 
     @Override

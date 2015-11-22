@@ -36,16 +36,31 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class StormSqlBolt extends BaseRichBolt implements DataSource {
-    protected static final Logger log = LoggerFactory.getLogger(StormSqlBolt.class);
+@SuppressWarnings("Duplicates")
+public class StormSqlBolt_1 extends BaseRichBolt {
+    protected static final Logger log = LoggerFactory.getLogger(StormSqlBolt_1.class);
+    private AtomicInteger ai = new AtomicInteger();
 
     private OutputCollector collector;
+
+    private ChannelContext ctx;
+    private ChannelHandler handler;
+    private DataSourcesProvider dataSourceProvider;
+    private DataSource dataSource;
+    private Wrapper wrapper;
+
+    public StormSqlBolt_1() {
+        wrapper = new Wrapper();
+        dataSource = new MyDataSource();    // sets ctx
+        ctx = ((MyDataSource)dataSource).getCtx();
+        dataSourceProvider = new MyDataSourcesProvider(dataSource);
+        handler = new MyChannnelHandler(null);          //TODO
+    }
+
 
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
@@ -67,8 +82,6 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
         }
 
     }
-
-    private AtomicInteger ai = new AtomicInteger();
 
     @Override
     public void execute(Tuple input) {
@@ -92,6 +105,14 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
         collector.ack(input);
     }
 
+    private Values createValues(Tuple input) {
+        return new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2));
+    }
+    @Override
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare(new Fields("F2", "F1", "F3"));
+    }
+
     private void sleep(long time) {
         try {
             log.info("&&&&&&&&&& Sleeping Starting [{}]", ai.get());
@@ -102,29 +123,31 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
         }
     }
 
-    private Values createValues(Tuple input) {
-        return new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2));
-    }
-
-    @Override
-    public void declareOutputFields(OutputFieldsDeclarer declarer) {
-        declarer.declare(new Fields("F2", "F1", "F3"));
-    }
-
     // =========== Storm SQL Code ==============
 
-    private ChannelContext ctx;
+    class Wrapper {
 
-    @Override
-    public void open(ChannelContext ctx) {
-        this.ctx = new SpecialChannelContext(ctx);
+    }
+
+    class MyDataSource implements DataSource {
+        ChannelContext ctx;
+        @Override
+        public void open(ChannelContext ctx) {
+            this.ctx = new SpecialChannelContext(ctx, null);    //TODO
+        }
+
+        public ChannelContext getCtx() {
+            return ctx;
+        }
     }
 
     class SpecialChannelContext implements ChannelContext {
         ChannelContext parent;
+        private ChannelHandler channelHandler;
 
-        public SpecialChannelContext(ChannelContext parent) {
+        public SpecialChannelContext(ChannelContext parent, ChannelHandler channelHandler) {
             this.parent = parent;
+            this.channelHandler = channelHandler;
         }
 
         @Override
@@ -140,9 +163,13 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
 
     // ==========
 
-    private final Queue<List<Object>> buffer = new LinkedList<>();
+    class MyChannnelHandler implements ChannelHandler {
+        ChannelContext channelContext;
 
-    private ChannelHandler handler =  new ChannelHandler() {
+        public MyChannnelHandler(ChannelContext channelContext) {
+            this.channelContext = channelContext;
+        }
+
         @Override
         public void dataReceived(ChannelContext ctx, Values data) {
             log.info("++++++++ Data Received {}", data);
@@ -159,11 +186,17 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
         public void exceptionCaught(Throwable cause) {
 
         }
-    };
+    }
 
     // ==========
 
-    private DataSourcesProvider dataSourceProvider = new DataSourcesProvider() {
+    class MyDataSourcesProvider implements DataSourcesProvider {
+        DataSource dataSource;
+
+        public MyDataSourcesProvider(DataSource dataSource) {
+            this.dataSource = dataSource;
+        }
+
         @Override
         public String scheme() {
             return "RBTS";
@@ -171,7 +204,11 @@ public class StormSqlBolt extends BaseRichBolt implements DataSource {
 
         @Override
         public DataSource construct(URI uri, String inputFormatClass, String outputFormatClass, List<Map.Entry<String, Class<?>>> fields) {
-            return StormSqlBolt.this;
+            return dataSource;
         }
-    };
+
+        public DataSource getDataSource() {
+            return dataSource;
+        }
+    }
 }

@@ -20,6 +20,8 @@
 package org.apache.storm.sql.runtime;
 
 import backtype.storm.tuple.Values;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Channels {
   private static final ChannelContext VOID_CTX = new ChannelContext() {
@@ -40,9 +42,13 @@ public class Channels {
       this.next = next;
     }
 
+    protected static final Logger log = LoggerFactory.getLogger(ChannelContextAdapter.class);
+
     @Override
     public void emit(Values data) {
+      log.info("******** Before ******** {}", data);
       handler.dataReceived(next, data);
+      log.info("******** After ******** {}", data);
     }
 
     @Override

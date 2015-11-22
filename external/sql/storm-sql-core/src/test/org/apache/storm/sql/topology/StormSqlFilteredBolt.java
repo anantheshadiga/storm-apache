@@ -53,6 +53,6 @@ public class StormSqlFilteredBolt extends BaseRichBolt {
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
-        declarer.declare(new Fields("F1", "F2", "F3"));
+        declarer.declare(new Fields("F2", "F1", "F3"));
     }
 }
