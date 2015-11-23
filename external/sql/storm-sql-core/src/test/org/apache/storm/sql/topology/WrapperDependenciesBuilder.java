@@ -18,19 +18,12 @@
 
 package org.apache.storm.sql.topology;
 
-import org.apache.storm.sql.DataSourcesProvider;
-import org.apache.storm.sql.DataSourcesRegistry;
-import org.apache.storm.sql.StormSql;
 import org.apache.storm.sql.runtime.ChannelHandler;
-import org.apache.storm.sql.runtime.DataSource;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class WrapperDependenciesBuilder {
     private ChannelHandler channelHandler;
 
-    public DataSource getDataSource() {
+    /*public DataSource getDataSource() {
         return new Wrapper.MyDataSource();
     }
 
@@ -56,5 +49,5 @@ public class WrapperDependenciesBuilder {
         } catch (Exception e) {
             throw new RuntimeException("Failed to compile query", e);
         }
-    }
+    }*/
 }

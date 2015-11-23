@@ -40,7 +40,7 @@ public class StormSqlBolt_3 extends BaseRichBolt {
     private Wrapper wrapper;
 
     public StormSqlBolt_3() {
-        wrapper = new Wrapper(new WrapperDependenciesBuilder());
+        wrapper = new Wrapper();
     }
 
     @Override

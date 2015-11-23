@@ -22,12 +22,15 @@ import backtype.storm.task.OutputCollector;
 import backtype.storm.tuple.Tuple;
 import backtype.storm.tuple.Values;
 import org.apache.storm.sql.DataSourcesProvider;
+import org.apache.storm.sql.DataSourcesRegistry;
+import org.apache.storm.sql.StormSql;
 import org.apache.storm.sql.runtime.ChannelContext;
 import org.apache.storm.sql.runtime.ChannelHandler;
 import org.apache.storm.sql.runtime.DataSource;
 
 import java.io.Serializable;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -38,10 +41,12 @@ public class Wrapper implements Serializable {
     private DataSourcesProvider dataSourceProvider; // step 4
     private boolean evaluates;
 
-    public Wrapper(WrapperDependenciesBuilder builder) {
-        this.dataSource = builder.getDataSource();
-        this.channelHandler = builder.getChannelHandler();
-        this.dataSourceProvider = builder.getDataSourceProvider();
+    public Wrapper() {
+        // These steps cannot be changed
+        this.dataSource = this.new MyDataSource();
+        this.channelHandler = this.new MyChannelHandler();
+        this.dataSourceProvider = this.new MyDataSourcesProvider();
+        compileQuery();
     }
 
     public boolean eval(Tuple input) {
@@ -58,6 +63,19 @@ public class Wrapper implements Serializable {
 
     private Values createValues(Tuple input) {
         return new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2));
+    }
+
+    private void compileQuery() {
+        try {
+            DataSourcesRegistry.providerMap().put("RBTS", dataSourceProvider);      //RBTS - Rules Bolt Table Schema
+            List<String> stmnt = new ArrayList<>();
+            stmnt.add("CREATE EXTERNAL TABLE RBT (F1 INTEGER, F2 INT, F3 INT) LOCATION 'RBTS:///RBT'");
+            stmnt.add("SELECT F1,F2,F3 FROM RBT WHERE F1 < 2 AND F2 < 3 AND F3 < 4");
+            StormSql stormSql = StormSql.construct();
+            stormSql.execute(stmnt, channelHandler);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed preparing query", e);
+        }
     }
 
     class MyDataSource implements DataSource {
