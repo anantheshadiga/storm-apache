@@ -36,7 +36,7 @@ public class StormSqlTopology {
     public static void testTopology() throws Exception {
         TopologyBuilder builder = new TopologyBuilder();
         builder.setSpout(STORM_SQL_SPOUT, new StormSqlSpout());
-        builder.setBolt(STORM_SQL_BOLT, new StormSqlBolt_2()).shuffleGrouping(STORM_SQL_SPOUT);
+        builder.setBolt(STORM_SQL_BOLT, new StormSqlBolt_3()).shuffleGrouping(STORM_SQL_SPOUT);
 //        builder.setBolt(STORM_SQL_BOLT, new StormSqlBolt()).shuffleGrouping(STORM_SQL_SPOUT);
         builder.setBolt(STORM_SQL_FILTERED_BOLT, new StormSqlFilteredBolt()).shuffleGrouping(STORM_SQL_BOLT);
 

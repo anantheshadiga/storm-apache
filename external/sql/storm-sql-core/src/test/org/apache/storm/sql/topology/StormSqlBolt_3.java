@@ -24,20 +24,9 @@ import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.topology.base.BaseRichBolt;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Tuple;
-import backtype.storm.tuple.Values;
-import org.apache.storm.sql.DataSourcesProvider;
-import org.apache.storm.sql.DataSourcesRegistry;
-import org.apache.storm.sql.StormSql;
-import org.apache.storm.sql.runtime.ChannelContext;
-import org.apache.storm.sql.runtime.ChannelHandler;
-import org.apache.storm.sql.runtime.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Serializable;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -51,19 +40,8 @@ public class StormSqlBolt_3 extends BaseRichBolt {
     private Wrapper wrapper;
 
     public StormSqlBolt_3() {
-        wrapper = new Wrapper().Builder().build();
-        // Step 1 && Step 2
-        MyDataSource dataSource = new MyDataSource(wrapper);
-        wrapper.setDataSource(dataSource);
-        MyChannelHandler channelHandler = new MyChannelHandler(wrapper);
-        // Step 3
-        wrapper.setChannelHandler(channelHandler);
-        // Step 4
-        wrapper.setDataSourceProvider(new MyDataSourcesProvider(dataSource));
-        // Step 5
-        wrapper.compileQuery();
+        wrapper = new Wrapper(new WrapperDependenciesBuilder());
     }
-
 
     @Override
     public void prepare(Map stormConf, TopologyContext context, OutputCollector collector) {
@@ -101,129 +79,6 @@ public class StormSqlBolt_3 extends BaseRichBolt {
             log.info("&&&&&&&&&& Sleeping Finished [{}]", ai.incrementAndGet());
         } catch (InterruptedException e) {
             e.printStackTrace();
-        }
-    }
-
-    // =========== Storm SQL Code ==============
-
-    public class Wrapper implements Serializable {
-        private DataSource dataSource;  // step 1
-        private ChannelContext channelContext;     // step 2 - Data Source sets context
-        private ChannelHandler channelHandler; // step 3
-        private DataSourcesProvider dataSourceProvider; // step 4
-        private boolean evaluates;
-
-        public Wrapper(Builder builder) {
-            this.dataSource = builder.dataSource;
-            this.channelContext = builder.channelContext;
-            this.channelHandler = builder.channelHandler;
-            this.dataSourceProvider = builder.dataSourceProvider;
-        }
-
-        public class Builder {
-            private DataSource dataSource;  // step 1
-            private ChannelContext channelContext;     // step 2 - Data Source sets context
-            private ChannelHandler channelHandler; // step 3
-            private DataSourcesProvider dataSourceProvider; // step 4
-
-            public Wrapper build() {
-                setDataSource(new MyDataSource());      // Sets Wrapper.this.channelContext
-                setChannelHandler(new MyChannelHandler());
-                setDataSourceProvider(new MyDataSourcesProvider());
-                compileQuery();                     //TODO: Best place to put this?
-                return new Wrapper(this);
-            }
-
-            public void setDataSource(DataSource dataSource) {
-                this.dataSource = dataSource;
-            }
-
-            public void setChannelContext(ChannelContext channelContext) {
-                this.channelContext = channelContext;
-            }
-
-            public void setChannelHandler(ChannelHandler channelHandler) {
-                this.channelHandler = channelHandler;
-            }
-
-            public void setDataSourceProvider(DataSourcesProvider dataSourceProvider) {
-                this.dataSourceProvider = dataSourceProvider;
-            }
-
-            public void compileQuery() {
-                try {
-                    DataSourcesRegistry.providerMap().put("RBTS", dataSourceProvider);      //RBTS - Rules Bolt Table Schema
-                    List<String> stmnt = new ArrayList<>();
-                    stmnt.add("CREATE EXTERNAL TABLE RBT (F1 INTEGER, F2 INT, F3 INT) LOCATION 'RBTS:///RBT'");
-                    stmnt.add("SELECT F1,F2,F3 FROM RBT WHERE F1 < 2 AND F2 < 3 AND F3 < 4");
-                    StormSql stormSql = StormSql.construct();
-                    stormSql.execute(stmnt, channelHandler);
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed preparing query", e);
-                }
-            }
-        }
-
-        public boolean eval(Tuple input) {
-            Values values = createValues(input);
-            channelContext.emit(values);
-            boolean evals = evaluates;      // This value gets set synchronously in a callback in ChannelHandler
-            evaluates = false;              // reset
-            return evals;
-        }
-
-        public void execute(Tuple tuple, OutputCollector outputCollector) {
-            outputCollector.emit(tuple, createValues(tuple));
-        }
-
-        private Values createValues(Tuple input) {
-            return new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2));
-        }
-
-        public void compileQuery() {
-            try {
-                DataSourcesRegistry.providerMap().put("RBTS", dataSourceProvider);      //RBTS - Rules Bolt Table Schema
-                List<String> stmnt = new ArrayList<>();
-                stmnt.add("CREATE EXTERNAL TABLE RBT (F1 INTEGER, F2 INT, F3 INT) LOCATION 'RBTS:///RBT'");
-                stmnt.add("SELECT F1,F2,F3 FROM RBT WHERE F1 < 2 AND F2 < 3 AND F3 < 4");
-                StormSql stormSql = StormSql.construct();
-                stormSql.execute(stmnt, channelHandler);
-            } catch (Exception e) {
-                throw new RuntimeException("Failed preparing query", e);
-            }
-        }
-
-        class MyDataSource implements DataSource {
-            @Override
-            public void open(ChannelContext ctx) {
-                Wrapper.this.channelContext = ctx;
-            }
-        }
-
-        class MyChannelHandler implements ChannelHandler {
-            @Override
-            public void dataReceived(ChannelContext ctx, Values data) {
-                log.info("++++++++ Data Received {}", data);
-                Wrapper.this.evaluates = true;
-            }
-
-            @Override
-            public void channelInactive(ChannelContext ctx) { }
-
-            @Override
-            public void exceptionCaught(Throwable cause) { }
-        }
-
-        class MyDataSourcesProvider implements DataSourcesProvider {
-            @Override
-            public String scheme() {
-                return "RBTS";
-            }
-
-            @Override
-            public DataSource construct(URI uri, String inputFormatClass, String outputFormatClass, List<Map.Entry<String, Class<?>>> fields) {
-                return Wrapper.this.dataSource;
-            }
         }
     }
 }
