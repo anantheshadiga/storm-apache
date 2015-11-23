@@ -200,29 +200,8 @@ public class StormSqlBolt_2 extends BaseRichBolt {
 
         @Override
         public void open(ChannelContext ctx) {
-            wrapper.setCtx(new SpecialChannelContext(ctx));    //TODO: null param
+            wrapper.setCtx(ctx);
         }
-
-        public ChannelContext getCtx() {    //TODO: Do I need
-            return wrapper.getCtx();
-        }
-    }
-
-    //TODO: probably don't even need this
-    class SpecialChannelContext implements ChannelContext {
-        ChannelContext parent;
-
-        public SpecialChannelContext(ChannelContext parent) {
-            this.parent = parent;
-        }
-
-        @Override
-        public void emit(Values data) {
-            parent.emit(data);
-        }
-
-        @Override
-        public void fireChannelInactive() { }
     }
 
     // ==========
