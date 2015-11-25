@@ -46,7 +46,7 @@ public class Wrapper implements Serializable {
         this.dataSource = this.new MyDataSource();
         this.channelHandler = this.new MyChannelHandler();
         this.dataSourceProvider = this.new MyDataSourcesProvider();
-        compileQuery();
+//        compileQuery();
     }
 
     public boolean eval(Tuple input) {
@@ -62,10 +62,10 @@ public class Wrapper implements Serializable {
     }
 
     private Values createValues(Tuple input) {
-        return new Values(input.getInteger(0), input.getInteger(1), input.getInteger(2));
+        return (Values) input.getValues();
     }
 
-    private void compileQuery() {
+    public void compileQuery() {
         try {
             DataSourcesRegistry.providerMap().put("RBTS", dataSourceProvider);      //RBTS - Rules Bolt Table Schema
             List<String> stmnt = new ArrayList<>();

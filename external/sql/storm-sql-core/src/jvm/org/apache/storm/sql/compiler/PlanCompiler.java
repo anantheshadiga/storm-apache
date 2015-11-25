@@ -116,10 +116,8 @@ public class PlanCompiler {
     ClassLoader cl = new CompilingClassLoader(getClass().getClassLoader(),
                                               PACKAGE_NAME + ".Processor",
                                               javaCode, null);
-
-    /*return (AbstractValuesProcessor) cl.loadClass(
-            PACKAGE_NAME + ".Processor").newInstance();*/
-    return new Processor();
+    return (AbstractValuesProcessor) cl.loadClass(
+        PACKAGE_NAME + ".Processor").newInstance();
   }
 
   private static void printEpilogue(
