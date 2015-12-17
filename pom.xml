@@ -272,6 +272,7 @@
         <module>external/storm-cassandra</module>
         <module>external/storm-mqtt</module>
         <module>examples/storm-starter</module>
+        <module>external/storm-kafka-new-consumer-api</module>
     </modules>
 
     <dependencies>
