@@ -16,48 +16,38 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.kafka;
+package org.apache.storm.kafka.spout.strategy;
 
-import backtype.storm.spout.SpoutOutputCollector;
-import backtype.storm.task.TopologyContext;
-import backtype.storm.topology.OutputFieldsDeclarer;
-import backtype.storm.topology.base.BaseRichSpout;
+import org.apache.storm.tuple.Fields;
 
-import java.util.Map;
-
-public class KafkaSpout extends BaseRichSpout {
+public class AutomaticOffsetStrategy implements KafkaSpoutStrategy {
     @Override
-    public void declareOutputFields(OutputFieldsDeclarer declarer) {
+    public Fields getDeclaredOutputFields() {
+        return null;
+    }
+
+    @Override
+    public StreamsAndOutputFields getDeclaredStreamsAndOutputFields() {
+        return null;
+    }
+
+    @Override
+    public boolean validate() {
+        return false;
+    }
+
+    @Override
+    public void recover() {
 
     }
 
     @Override
-    public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
+    public void ack() {
 
     }
 
     @Override
-    public void nextTuple() {
+    public void fail() {
 
-    }
-
-    @Override
-    public void close() {
-    }
-
-    @Override
-    public void activate() {
-    }
-
-    @Override
-    public void deactivate() {
-    }
-
-    @Override
-    public void ack(Object msgId) {
-    }
-
-    @Override
-    public void fail(Object msgId) {
     }
 }

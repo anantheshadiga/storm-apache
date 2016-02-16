@@ -16,16 +16,34 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.kafka;
+package org.apache.storm.kafka.spout.strategy;
 
-import org.junit.Test;
+import org.apache.storm.tuple.Fields;
 
-/**
- * Unit test for simple KafkaSpoutTest.
- */
-public class KafkaSpoutTest
-{
-    @Test
-    public void test_spoutFunctionality_expectedBehavior() throws Exception {
+public interface KafkaSpoutStrategy {
+    Fields getDeclaredOutputFields();
+    StreamsAndOutputFields getDeclaredStreamsAndOutputFields();
+    boolean validate();
+    void recover();
+    void ack();
+    void fail();
+
+
+    class StreamsAndOutputFields {
+        private String stream;
+        private Fields fields;
+
+        public StreamsAndOutputFields(String stream, Fields fields) {
+            this.stream = stream;
+            this.fields = fields;
+        }
+
+        public String getStream() {
+            return stream;
+        }
+
+        public Fields getFields() {
+            return fields;
+        }
     }
 }

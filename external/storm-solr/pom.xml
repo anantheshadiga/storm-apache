@@ -95,6 +95,17 @@
             <artifactId>gson</artifactId>
             <version>2.3.1</version>
         </dependency>
+        <!--TODO DELETE-->
+        <!--kafka libraries-->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>${kafka.artifact.id}</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
