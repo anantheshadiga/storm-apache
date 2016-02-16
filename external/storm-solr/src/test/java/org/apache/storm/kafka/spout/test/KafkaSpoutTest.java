@@ -48,9 +48,10 @@ public class KafkaSpoutTest {
 //        System.err.println("Before poll Err");
 
 //        System.err.println("After poll");
+        int i = 0;
         while (true) {
             ConsumerRecords<String, String> records = consumer.poll(10000);
-            consumer.seek(new TopicPartition("test", 0), 0);
+            consumer.seek(new TopicPartition("test", 0), i++);
             for (ConsumerRecord<String, String> record : records) {
 //                System.err.println("Inside Loop");
                 System.err.printf("offset = %d, key = %s, value = %s\n", record.offset(), record.key(), record.value());
