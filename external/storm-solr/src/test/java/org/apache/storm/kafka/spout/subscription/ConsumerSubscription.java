@@ -36,7 +36,6 @@ public interface ConsumerSubscription {
         public void subscribe(KafkaConsumer kafkaConsumer) {
             kafkaConsumer.subscribe(topics);
 
-            kafkaConsumer.subscribe();
 
         }
     }

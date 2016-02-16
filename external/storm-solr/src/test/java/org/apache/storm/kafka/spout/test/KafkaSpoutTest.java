@@ -21,7 +21,6 @@ package org.apache.storm.kafka.spout.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -51,7 +50,7 @@ public class KafkaSpoutTest {
         int i = 0;
         while (true) {
             ConsumerRecords<String, String> records = consumer.poll(10000);
-            consumer.seek(new TopicPartition("test", 0), i++);
+//            consumer.seek(new TopicPartition("test", 0), i++);
             for (ConsumerRecord<String, String> record : records) {
 //                System.err.println("Inside Loop");
                 System.err.printf("offset = %d, key = %s, value = %s\n", record.offset(), record.key(), record.value());
@@ -65,7 +64,7 @@ public class KafkaSpoutTest {
         Properties props = new Properties();
         props.put("bootstrap.servers", "127.0.0.1:9092");
 //        props.put("bootstrap.servers", "localhost:9923");
-        props.put("group.id", "test-group");
+        props.put("group.id", "test-group-1");
 //        props.put("group.id", "test-consumer-group");
         props.put("enable.auto.commit", "true");
         props.put("auto.commit.interval.ms", "1000");

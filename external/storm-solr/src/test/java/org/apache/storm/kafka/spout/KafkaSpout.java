@@ -32,6 +32,8 @@ import org.apache.storm.tuple.Values;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class KafkaSpout<K,V> extends BaseRichSpout {
     protected SpoutOutputCollector collector;
@@ -55,13 +57,36 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 //        kafkaConsumer.commitSync();
     }
 
+
+    ConcurrentMap<String, ConsumerRecord> topicToPendingRecords = new ConcurrentHashMap<>();
+
     @Override
     public void nextTuple() {
+        if (getFailedTuples() + getPendingTuples() < getMaxPendingTuples()) {
+            ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
+            consumerRecords.count();
+            consumerRecords.partitions();
+            Iterable<ConsumerRecord<K, V>> records = consumerRecords.records("bla");
+            for (ConsumerRecord<K, V> record : records) {
+                record.offset();
+
+            }
 
 
+            kafkaConsumer.commitSync();
+            // poll tuples
+        }
+
+        // poll
+
+        // emit when pendingTuples > maxPendingTuples || wait time > maxWaitTime
+            // new tuples
+            // failed tuples
 
         kafkaConsumer.subscribe();
         ConsumerRecords<K,V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
+
+        kafkaConsumer.
 
         process(consumerRecords, collector);
 
@@ -76,8 +101,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             consumerRecord.value();
         }
 
+        kafkaConsumer.commitSync();
 
-        collector.emit(getStreamId(), getTuple(), getMessageId());
+        collector.emit(getStreamId(), getTuple(), getMessageId(con));
     }
 
     private void getOutputFields1() {
