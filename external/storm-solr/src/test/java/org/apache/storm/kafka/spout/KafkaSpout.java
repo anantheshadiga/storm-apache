@@ -123,8 +123,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         acked.put(new TopicPartition(messageId.topic, messageId.partition),
                 new OffsetAndMetadata(messageId.offset, metadata));
         log.debug("Acked {}", metadata);
+
         offsetManager.ack(messageId);
         offsetManager.commitReadyOffsets();
+
+        //TODO: removed from failed list
     }
 
     Map<TopicPartition, OffsetManager> offsetManagers;
@@ -132,37 +135,46 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private OffsetManager offsetManager;
 
     private class OffsetManager {
-        final Map<TopicPartition, OffsetManagerEntry> partitionToOffsetMgrEntry = new HashMap<>();
+        final Map<TopicPartition, OffsetManagerEntry> acked = new HashMap<>();
+        final Map<TopicPartition, MessageId> failed = new HashMap<>();
 
-        public void ack(MessageId messageId) {
-            final TopicPartition tp = new TopicPartition(messageId.topic, messageId.partition);
-            if (!partitionToOffsetMgrEntry.containsKey(tp)) {
-                partitionToOffsetMgrEntry.put(tp, new OffsetManagerEntry(null, null));
+        public void ack(MessageId msgId) {
+            final TopicPartition tp = new TopicPartition(msgId.topic, msgId.partition);
+            if (!acked.containsKey(tp)) {
+                acked.put(tp, new OffsetManagerEntry(null, null));
             }
-            OffsetManagerEntry ome = partitionToOffsetMgrEntry.get(tp);
-            ome.ack(messageId);
+            OffsetManagerEntry ome = acked.get(tp);
+            ome.ack(msgId);
+
+        }
+
+        public void fail(MessageId msgId) {
+            final TopicPartition tp = new TopicPartition(msgId.topic, msgId.partition);
+            failed.put(tp, )
         }
 
         /** Commits to kafka the maximum sequence of continuous offsets that have been acked for a partition */
         public void commitReadyOffsets() {
             final Map<TopicPartition, OffsetAndMetadata> topicPartitionToOffsetAndMeta = new HashMap<>();
-            for (TopicPartition tp : partitionToOffsetMgrEntry.keySet()) {
-                final long maxOffsetAcked = partitionToOffsetMgrEntry.get(tp).getMaxOffsetAcked();
-                topicPartitionToOffsetAndMeta.put(tp, new OffsetAndMetadata(maxOffsetAcked, ))
-
+            for (TopicPartition tp : acked.keySet()) {
+                final MessageId msgId = acked.get(tp).getMaxOffsetMsgAcked();
+                topicPartitionToOffsetAndMeta.put(tp, new OffsetAndMetadata(msgId.offset, msgId.buildMetadata(Thread.currentThread())));
             }
 
             kafkaConsumer.commitSync(topicPartitionToOffsetAndMeta);
 
+            cleanMap();
             // have to clean topic partitions if that is the case
-
         }
 
+        private void cleanMap() {
+
+        }
     }
 
     private class OffsetManagerEntry {
         private long lastCommittedOffset = 0;
-        private List<Long> offsetsSublist = new ArrayList<>();      // in root keep only two offsets - first and last
+        private List<MessageId> offsetsSublist = new ArrayList<>();      // in root keep only two offsets - first and last
         private OffsetManagerEntry prev;
         private OffsetManagerEntry next;
 
@@ -176,11 +188,12 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         }
 
-        public long getMaxOffsetAcked() {
-            if (isRoot() && !offsetsSublist.isEmpty() && offsetsSublist.get(0) == lastCommittedOffset + 1) {
-                kafkaConsumer.commitSync();
+        public MessageId getMaxOffsetMsgAcked() {
+            MessageId msgId = null;
+            if (isRoot() && !offsetsSublist.isEmpty() && offsetsSublist.get(0).offset == lastCommittedOffset + 1) {
+                msgId = offsetsSublist.get(offsetsSublist.size() - 1);
             }
-
+            return msgId;
         }
 
         private boolean isRoot() {
