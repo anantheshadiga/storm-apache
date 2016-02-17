@@ -27,7 +27,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-public class KafkaSpoutTestMain {
+public class KafkaSpoutTopologyMain {
     public static void main(String[] args) throws InterruptedException {
 //        stopOnInput();
         submitTopologyLocalCluster(getTopolgy(), getConfig());
@@ -63,7 +63,7 @@ public class KafkaSpoutTestMain {
 
     public static StormTopology getTopolgy() {
         TopologyBuilder tp = new TopologyBuilder();
-        tp.setSpout("hmcl_kafka_spout", new KafkaTestSpout());
+        tp.setSpout("hmcl_kafka_spout", new KafkaTestSpout(), 10);
         tp.setBolt("hmcl_kafka_bolt", new KafkaTestBolt()).shuffleGrouping("hmcl_kafka_spout");
         return tp.createTopology();
     }

@@ -21,6 +21,7 @@ package org.apache.storm.kafka.spout.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -34,6 +35,9 @@ public class KafkaSpoutTest {
     public void test_spoutFunctionality_expectedBehavior() throws Exception {
     }
 
+    public static void main(String[] args) {
+        new KafkaSpoutTest().main();
+    }
 
     @Test
     public void main() {
@@ -50,7 +54,12 @@ public class KafkaSpoutTest {
         int i = 0;
         while (true) {
             ConsumerRecords<String, String> records = consumer.poll(10000);
-//            consumer.seek(new TopicPartition("test", 0), i++);
+            System.err.println("i = " + i);
+            consumer.seek(new TopicPartition("test", 0), i++);
+            if (i == 1) {
+                records = consumer.poll(10000);
+                consumer.commitAsync();
+            }
             for (ConsumerRecord<String, String> record : records) {
 //                System.err.println("Inside Loop");
                 System.err.printf("offset = %d, key = %s, value = %s\n", record.offset(), record.key(), record.value());

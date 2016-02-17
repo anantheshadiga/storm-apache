@@ -21,13 +21,19 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.storm.Config;
 import org.apache.storm.kafka.spout.strategy.KafkaConfig;
+import org.apache.storm.kafka.spout.strategy.StreamBuilder;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.base.BaseRichSpout;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +42,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class KafkaSpout<K,V> extends BaseRichSpout {
+    private static final Logger log = LoggerFactory.getLogger(KafkaSpout.class);
+
+    private Map conf;
+    private TopologyContext context;
     protected SpoutOutputCollector collector;
     private final KafkaConfig<K, V> kafkaConfig;
     private KafkaConsumer<K, V> kafkaConsumer;
+    private long waitTime;
+    private long maxWaitTime;
+    private final ConcurrentMap<TopicPartition, OffsetAndMetadata> acked = new ConcurrentHashMap<>();   //TODO: ConcurrentHashMap
+    private Map<String, String> failed;
+    private ConcurrentMap<TopicPartition, Iterable<ConsumerRecord<K, V>>> polled = new ConcurrentHashMap<>();
+    private int numPendingRecords = 0;
+
+    private StreamBuilder<K,V> streamBuilder;
 
     public KafkaSpout(KafkaConfig<K,V> kafkaConfig) {
         this.kafkaConfig = kafkaConfig;                 // Pass in configuration
@@ -46,84 +64,129 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
+        this.conf = conf;
+        this.context = context;
         this.collector = collector;
         this.kafkaConsumer = new KafkaConsumer<>(kafkaConfig.getConfigs(), kafkaConfig.getKeyDeserializer(), kafkaConfig.getValueDeserializer());
 
         List<String> topics = new ArrayList<>();    // TODO
         subscribe(kafkaConsumer);
-
         kafkaConsumer.subscribe(topics);
-//        kafkaConsumer.seek();6
-//        kafkaConsumer.commitSync();
     }
 
 
-    ConcurrentMap<String, ConsumerRecord> topicToPendingRecords = new ConcurrentHashMap<>();
 
+    //TODO HANDLE PARALLELISM
+//    String topologyMaxSpoutPending = Config.TOPOLOGY_MAX_SPOUT_PENDING;
     @Override
     public void nextTuple() {
-        if (getFailedTuples() + getPendingTuples() < getMaxPendingTuples()) {
+        commitAckedRecords();
+
+        if (!failedTuples.isEmpty()) {
+            retryFailedTuples();
+        } else {
+            pollNewRecordsAndEmitTuples();
+        }
+
+        // poll new records
+        if (getFailedRecords() + getNumPendingRecords() < getMaxPendingRecords()) {
             ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
-            consumerRecords.count();
-            consumerRecords.partitions();
-            Iterable<ConsumerRecord<K, V>> records = consumerRecords.records("bla");
-            for (ConsumerRecord<K, V> record : records) {
-                record.offset();
+            numPendingRecords += consumerRecords.count();
 
+            for (TopicPartition tp : consumerRecords.partitions()) {
+                polled.put(tp, consumerRecords.records(tp.topic()));
             }
-
-
-            kafkaConsumer.commitSync();
-            // poll tuples
         }
 
-        // poll
-
-        // emit when pendingTuples > maxPendingTuples || wait time > maxWaitTime
-            // new tuples
-            // failed tuples
-
-        kafkaConsumer.subscribe();
-        ConsumerRecords<K,V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
-
-        kafkaConsumer.
-
-        process(consumerRecords, collector);
+        // Emmit records if we have over the maxPendingRecords, or maxWaitTime has exceeded
+        if (getFailedRecords() + getNumPendingRecords() < getMaxPendingRecords() && getWaitTime() > getMaxWaitTime()) {
+            emitPolledTuples(); // Emmit polled tuples which includes retrying failed
 
 
-        consumerRecords.partitions();
-
-        for (ConsumerRecord<K, V> consumerRecord : consumerRecords) {
-            consumerRecord.key();
-            consumerRecord.partition();
-            consumerRecord.offset();
-            consumerRecord.topic();
-            consumerRecord.value();
+            collector.emit(getStreamId(), buildTuple(), getMessageId());
         }
 
-        kafkaConsumer.commitSync();
+        // emit when numPendingRecords > maxPendingTuples || wait time > maxWaitTime
+        // new tuples
+        // failed tuples
 
-        collector.emit(getStreamId(), getTuple(), getMessageId(con));
+        List<Values> messagesList = new ArrayList<Values>();
+
+        collector.emit(messagesList);
+    }
+
+    private void emitPolledTuples() {
+
+
+
+        collector.emit(getStreamId(), buildTuple(failed), getMessageId());
+
+    }
+
+    private void pollNewRecordsAndEmitTuples() {
+        ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
+        for (TopicPartition tp : consumerRecords.partitions()) {
+            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());
+            for (ConsumerRecord<K, V> record : records) {
+                collector.emit(getStreamId(tp), buildTuple(tp, record), getMessageId(record));    // emits one tuple per record
+            }
+            polled.put(tp, records);
+        }
+    }
+
+    private void emitFailedTuples() {
+
+    }
+
+    private void commit() {
+        synchronized(acked) {
+            kafkaConsumer.commitSync(acked);
+            //remove from polled map
+            //remove from acked
+        }
     }
 
     private void getOutputFields1() {
 
     }
 
-    private Values getTuple() {
-        return null;
+    private Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord) {
+        return streamBuilder.buildTuple(topicPartition, consumerRecord);
     }
 
     private Object getMessageId(ConsumerRecord<K,V> consumerRecord) {
-        return null;
+        return new MessageId(consumerRecord);
     }
 
     private void serialize() {
 
     }
 
-    private String getStreamId() {
-        return null;
+    private String getStreamId(TopicPartition topicPartition) {
+        return streamBuilder.getStream(topicPartition);
+    }
+
+    public int getFailedRecords() {
+        return -1;
+    }
+
+    public int getNumPendingRecords() {
+        return numPendingRecords;
+    }
+
+    //TODO confirm
+    public int getMaxPendingRecords() {
+        final String maxSpoutPending = (String) conf.get(Config.TOPOLOGY_MAX_SPOUT_PENDING);
+
+        return maxSpoutPending != null ? Math.min(Integer.parseInt(maxSpoutPending), getMaxWaitTime());
+    }
+
+    public long getWaitTime() {
+        return waitTime;
+    }
+
+    public long getMaxWaitTime() {
+        return maxWaitTime;
     }
 
 
@@ -171,6 +234,15 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             result = 31 * result + (int) (offset ^ (offset >>> 32));
             return result;
         }
+
+        public String getMetadata(Thread currThread) {
+            return "{" +
+                    "topic='" + topic + '\'' +
+                    ", partition=" + partition +
+                    ", offset=" + offset +
+                    ", thread='" + currThread.getName() + "'" +
+                    '}';
+        }
     }
 
     @Override
@@ -185,14 +257,19 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void ack(Object msgId) {
-        // commit message
-        LoggerHugo.doLog("Spout acked");
+        final MessageId messageId = (MessageId) msgId;
+        final String metadata = messageId.getMetadata(Thread.currentThread());
+        acked.put(new TopicPartition(messageId.topic, messageId.partition),
+                new OffsetAndMetadata(messageId.offset, metadata));
+        log.debug("Acked {}", metadata);
     }
 
     @Override
     public void fail(Object msgId) {
+        final MessageId messageId = (MessageId) msgId;
+        final String metadata = messageId.getMetadata(Thread.currentThread());
 
-        LoggerHugo.doLog("Spout failed");
+        log.debug("Failed " + metadata);
     }
 
     @Override

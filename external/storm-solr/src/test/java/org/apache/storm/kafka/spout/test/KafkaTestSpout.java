@@ -19,25 +19,27 @@
 package org.apache.storm.kafka.spout.test;
 
 import com.google.common.collect.Lists;
-import org.apache.storm.kafka.spout.KafkaSpout;
-import org.apache.storm.kafka.spout.strategy.KafkaSpoutStrategy;
+
+import org.apache.storm.kafka.spout.LoggerHugo;
+import org.apache.storm.spout.SpoutOutputCollector;
+import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.topology.base.BaseRichSpout;
+import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
-public class KafkaTestSpout extends KafkaSpout {
+public class KafkaTestSpout extends BaseRichSpout {
     public static final List<Values> listValues = Lists.newArrayList(
             getValues("1"), getValues("2"), getValues("3"));
+    private SpoutOutputCollector collector;
 
 
     public KafkaTestSpout() {
-        this(null);
-    }
 
-    public KafkaTestSpout(KafkaSpoutStrategy kafkaSpoutStrategy) {
-        super(kafkaSpoutStrategy);
     }
 
     private static Values getValues(String suf) {
@@ -45,16 +47,55 @@ public class KafkaTestSpout extends KafkaSpout {
         return new Values(suffix);
     }
 
+    int count = 0;
+
     @Override
     public void nextTuple() {
+        LoggerHugo.doLog("count start = " + count);
         final Random rand = new Random();
         final Values values = listValues.get(rand.nextInt(listValues.size()));
         collector.emit(values, values.get(0));
-        Thread.yield();
+//        Thread.yield();
+        LoggerHugo.doLog("count end = " +  ++count);
     }
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declare(getOutputFields());
+    }
+
+    @Override
+    public void ack(Object msgId) {
+        // commit message
+        LoggerHugo.doLog("Spout acked");
+    }
+
+    @Override
+    public void fail(Object msgId) {
+        LoggerHugo.doLog("Spout failed");
+    }
+
+    @Override
+    public void activate() {
+        //resume processing
+    }
+
+    @Override
+    public void deactivate() {
+        //commit
+    }
+
+    @Override
+    public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
+        this.collector = collector;
+    }
+
+    @Override
+    public void close() {
+        //remove resources
+    }
+
+    public Fields getOutputFields() {
+        return new Fields("hmcl-kafka-test-spout");
     }
 }

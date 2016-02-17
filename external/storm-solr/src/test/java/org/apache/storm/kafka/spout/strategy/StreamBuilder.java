@@ -16,17 +16,28 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.kafka.spout;
+package org.apache.storm.kafka.spout.strategy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.storm.tuple.Fields;
+import org.apache.storm.tuple.Values;
 
-public class LoggerHugo {
-    protected static final Logger log = LoggerFactory.getLogger(LoggerHugo.class);
+public abstract class StreamBuilder<K,V> {
+    private Fields outputFields;
 
-    public static void doLog(String msg) {
-//        System.out.println(Thread.currentThread() + " - HMCL - " + msg);
-//        log.info("HMCL - " + Thread.currentThread() + " - " + msg);
-        log.info("HMCL - " + msg);
+    public StreamBuilder(Fields outputFields) {
+        this.outputFields = outputFields;
     }
+
+    public abstract Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord);
+
+    public String getStream(TopicPartition topicPartition) {
+        return topicPartition.topic() + "#" + topicPartition.partition();
+    }
+
+    public String getStream(String name) {
+        return name;
+    }
+
 }
