@@ -132,25 +132,29 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private OffsetManager offsetManager;
 
     private class OffsetManager {
-        Map<TopicPartition, OffsetManager> partitionToOffset;
+        final Map<TopicPartition, OffsetManagerEntry> partitionToOffsetMgrEntry = new HashMap<>();
 
         public void ack(MessageId messageId) {
             final TopicPartition tp = new TopicPartition(messageId.topic, messageId.partition);
-            if (!partitionToOffset.containsKey(tp)) {
-                partitionToOffset.put(tp, new OffsetManager(messageId));
+            if (!partitionToOffsetMgrEntry.containsKey(tp)) {
+                partitionToOffsetMgrEntry.put(tp, new OffsetManagerEntry(null, null));
             }
-            OffsetManager om = partitionToOffset.get(tp);
-            om.ack(messageId);
+            OffsetManagerEntry ome = partitionToOffsetMgrEntry.get(tp);
+            ome.ack(messageId);
         }
 
         /** Commits to kafka the maximum sequence of continuous offsets that have been acked for a partition */
         public void commitReadyOffsets() {
-            final Map<TopicPartition, OffsetAndMetadata> topicPartitionToOffset = new HashMap<>();
-            for (TopicPartition tp : partitionToOffset.keySet()) {
-                partitionToOffset.get(tp).commitReadyOffsets();
+            final Map<TopicPartition, OffsetAndMetadata> topicPartitionToOffsetAndMeta = new HashMap<>();
+            for (TopicPartition tp : partitionToOffsetMgrEntry.keySet()) {
+                final long maxOffsetAcked = partitionToOffsetMgrEntry.get(tp).getMaxOffsetAcked();
+                topicPartitionToOffsetAndMeta.put(tp, new OffsetAndMetadata(maxOffsetAcked, ))
+
             }
 
-            kafkaConsumer.commitSync(topicPartitionToOffset);
+            kafkaConsumer.commitSync(topicPartitionToOffsetAndMeta);
+
+            // have to clean topic partitions if that is the case
 
         }
 
@@ -162,13 +166,17 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         private OffsetManagerEntry prev;
         private OffsetManagerEntry next;
 
+        public OffsetManagerEntry(OffsetManagerEntry prev, OffsetManagerEntry next) {
+            this.prev = prev;
+            this.next = next;
+        }
 
-        public void ack(MessageId messageId, OffsetManagerEntry prev, OffsetManagerEntry next) {
+        public void ack(MessageId messageId) {
             //do merge
 
         }
 
-        public void commitReadyOffsets() {
+        public long getMaxOffsetAcked() {
             if (isRoot() && !offsetsSublist.isEmpty() && offsetsSublist.get(0) == lastCommittedOffset + 1) {
                 kafkaConsumer.commitSync();
             }
