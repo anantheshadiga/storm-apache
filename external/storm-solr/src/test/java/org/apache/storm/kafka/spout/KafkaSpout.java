@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -115,6 +116,70 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         collector.emit(messagesList);
     }
 
+    @Override
+    public void ack(Object msgId) {
+        final MessageId messageId = (MessageId) msgId;
+        final String metadata = messageId.buildMetadata(Thread.currentThread());
+        acked.put(new TopicPartition(messageId.topic, messageId.partition),
+                new OffsetAndMetadata(messageId.offset, metadata));
+        log.debug("Acked {}", metadata);
+        offsetManager.ack(messageId);
+        offsetManager.commitReadyOffsets();
+    }
+
+    Map<TopicPartition, OffsetManager> offsetManagers;
+
+    private OffsetManager offsetManager;
+
+    private class OffsetManager {
+        Map<TopicPartition, OffsetManager> partitionToOffset;
+
+        public void ack(MessageId messageId) {
+            final TopicPartition tp = new TopicPartition(messageId.topic, messageId.partition);
+            if (!partitionToOffset.containsKey(tp)) {
+                partitionToOffset.put(tp, new OffsetManager(messageId));
+            }
+            OffsetManager om = partitionToOffset.get(tp);
+            om.ack(messageId);
+        }
+
+        /** Commits to kafka the maximum sequence of continuous offsets that have been acked for a partition */
+        public void commitReadyOffsets() {
+            final Map<TopicPartition, OffsetAndMetadata> topicPartitionToOffset = new HashMap<>();
+            for (TopicPartition tp : partitionToOffset.keySet()) {
+                partitionToOffset.get(tp).commitReadyOffsets();
+            }
+
+            kafkaConsumer.commitSync(topicPartitionToOffset);
+
+        }
+
+    }
+
+    private class OffsetManagerEntry {
+        private long lastCommittedOffset = 0;
+        private List<Long> offsetsSublist = new ArrayList<>();      // in root keep only two offsets - first and last
+        private OffsetManagerEntry prev;
+        private OffsetManagerEntry next;
+
+
+        public void ack(MessageId messageId, OffsetManagerEntry prev, OffsetManagerEntry next) {
+            //do merge
+
+        }
+
+        public void commitReadyOffsets() {
+            if (isRoot() && !offsetsSublist.isEmpty() && offsetsSublist.get(0) == lastCommittedOffset + 1) {
+                kafkaConsumer.commitSync();
+            }
+
+        }
+
+        private boolean isRoot() {
+            return prev == null;
+        }
+    }
+
     private void emitPolledTuples() {
 
 
@@ -123,6 +188,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     }
 
+    //TODO: Null message id for no acking, which is good to use with enable.auto.commit=false
     private void pollNewRecordsAndEmitTuples() {
         ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
         for (TopicPartition tp : consumerRecords.partitions()) {
@@ -185,11 +251,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         return waitTime;
     }
 
+
     public long getMaxWaitTime() {
         return maxWaitTime;
     }
-
-
     private static class MessageId {
         private String topic;
         private int partition;
@@ -234,8 +299,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             result = 31 * result + (int) (offset ^ (offset >>> 32));
             return result;
         }
-
-        public String getMetadata(Thread currThread) {
+        public String buildMetadata(Thread currThread) {
             return "{" +
                     "topic='" + topic + '\'' +
                     ", partition=" + partition +
@@ -243,12 +307,16 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                     ", thread='" + currThread.getName() + "'" +
                     '}';
         }
+
     }
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         if (kafkaSpoutStrategy.getDeclaredStreamsAndOutputFields() != null)     //TODO
             declarer.declare(getOutputFields());
+        else {
+            declarer.declareStream();
+        }
     }
 
     public Fields getOutputFields() {
@@ -256,18 +324,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     }
 
     @Override
-    public void ack(Object msgId) {
-        final MessageId messageId = (MessageId) msgId;
-        final String metadata = messageId.getMetadata(Thread.currentThread());
-        acked.put(new TopicPartition(messageId.topic, messageId.partition),
-                new OffsetAndMetadata(messageId.offset, metadata));
-        log.debug("Acked {}", metadata);
-    }
-
-    @Override
     public void fail(Object msgId) {
         final MessageId messageId = (MessageId) msgId;
-        final String metadata = messageId.getMetadata(Thread.currentThread());
+        final String metadata = messageId.buildMetadata(Thread.currentThread());
 
         log.debug("Failed " + metadata);
     }

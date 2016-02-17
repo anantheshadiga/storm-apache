@@ -28,15 +28,15 @@ import java.util.Arrays;
 import java.util.Properties;
 
 /**
- * Unit test for simple KafkaSpoutTest.
+ * Unit test for simple KafkaBrokerTest.
  */
-public class KafkaSpoutTest {
+public class KafkaBrokerTest {
     @Test
     public void test_spoutFunctionality_expectedBehavior() throws Exception {
     }
 
     public static void main(String[] args) {
-        new KafkaSpoutTest().main();
+        new KafkaBrokerTest().main();
     }
 
     @Test
