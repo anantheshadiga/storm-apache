@@ -24,7 +24,9 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -37,6 +39,16 @@ public class KafkaBrokerTest {
 
     public static void main(String[] args) {
         new KafkaBrokerTest().main();
+    }
+
+    @Test
+    public void testIdx() throws Exception {
+        List<Integer> li = new ArrayList<>();
+        li.add(0,0);
+        li.add(1,1);
+        li.add(0,2);
+        Integer val = li.get(li.size() - 1);
+        System.out.println("val = " + val);
     }
 
     @Test

@@ -36,9 +36,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -83,7 +86,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     public void nextTuple() {
         commitAckedRecords();
 
-        if (!failedTuples.isEmpty()) {
+
+        if (retry()) {
             retryFailedTuples();
         } else {
             pollNewRecordsAndEmitTuples();
@@ -116,52 +120,111 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         collector.emit(messagesList);
     }
 
+    private boolean retry() {
+        return offsetsManager.retry();
+    }
+
+    private void retryFailedTuples() {
+        offsetsManager.retryFailed();
+    }
+
+    private void commitAckedRecords() {
+        offsetsManager.commitAckedOffsets();
+    }
+
     @Override
     public void ack(Object msgId) {
         final MessageId messageId = (MessageId) msgId;
-        final String metadata = messageId.buildMetadata(Thread.currentThread());
+        final String metadata = messageId.metadata(Thread.currentThread());
         acked.put(new TopicPartition(messageId.topic, messageId.partition),
                 new OffsetAndMetadata(messageId.offset, metadata));
         log.debug("Acked {}", metadata);
 
-        offsetManager.ack(messageId);
-        offsetManager.commitReadyOffsets();
+        offsetsManager.ack(messageId);
+        offsetsManager.commitAckedOffsets();
 
         //TODO: removed from failed list
     }
 
-    Map<TopicPartition, OffsetManager> offsetManagers;
+    //TODO: HANDLE CONSUMER REBALANCE
 
-    private OffsetManager offsetManager;
+    @Override
+    public void fail(Object msgId) {
+        final MessageId messageId = (MessageId) msgId;
+        final String metadata = messageId.metadata(Thread.currentThread());
+        log.debug("Failed " + metadata);
+    }
 
-    private class OffsetManager {
-        final Map<TopicPartition, OffsetManagerEntry> acked = new HashMap<>();
-        final Map<TopicPartition, MessageId> failed = new HashMap<>();
+    private OffsetsManager offsetsManager;
+
+    private class OffsetsManager {
+        final Map<TopicPartition, OffsetEntry> acked = new HashMap<>();
+        final Map<TopicPartition, Set<MessageId>> failed = new HashMap<>();
 
         public void ack(MessageId msgId) {
             final TopicPartition tp = new TopicPartition(msgId.topic, msgId.partition);
-            if (!acked.containsKey(tp)) {
-                acked.put(tp, new OffsetManagerEntry(null, null));
-            }
-            OffsetManagerEntry ome = acked.get(tp);
-            ome.ack(msgId);
 
+            if (!acked.containsKey(tp)) {
+                acked.put(tp, new OffsetEntry(null, null));
+            }
+            acked.get(tp).ack(msgId);
+
+            // if acked message is a retry, remove it from failed data structure
+            if (failed.containsKey(tp)) {
+                final Set<MessageId> messageIds = failed.get(tp);
+                messageIds.remove(msgId);
+                if (messageIds.isEmpty()) {
+                    failed.remove(tp);
+                }
+            }
         }
 
         public void fail(MessageId msgId) {
             final TopicPartition tp = new TopicPartition(msgId.topic, msgId.partition);
-            failed.put(tp, )
+            if (!failed.containsKey(tp)) {
+                failed.put(tp, new HashSet<MessageId>());
+            }
+
+            final Set<MessageId> msgIds = failed.get(tp);
+            msgId.incNumFails();
+            msgIds.add(msgId);
+
+            // limit to max number of retries
+            if (msgId.numFails >= getMaxRetries()) {
+                log.debug("");
+                msgIds.remove(msgId);
+                if (msgIds.isEmpty()) {
+                    failed.remove(tp);
+                }
+            }
+        }
+
+        public boolean retry() {
+            return failed.size() != 0;
+        }
+
+        public void retryFailed() {
+            for (TopicPartition tp: failed.keySet()) {
+                for (MessageId msgId : failed.get(tp)) {
+                    collector.emit(getStreamId(tp), buildTuple(tp, ), msgId);
+                }
+            }
+        }
+
+        // TODO
+        private int getMaxRetries() {
+            return Integer.MAX_VALUE;
         }
 
         /** Commits to kafka the maximum sequence of continuous offsets that have been acked for a partition */
-        public void commitReadyOffsets() {
-            final Map<TopicPartition, OffsetAndMetadata> topicPartitionToOffsetAndMeta = new HashMap<>();
+        public void commitAckedOffsets() {
+            final Map<TopicPartition, OffsetAndMetadata> ackedOffsets = new HashMap<>();
             for (TopicPartition tp : acked.keySet()) {
                 final MessageId msgId = acked.get(tp).getMaxOffsetMsgAcked();
-                topicPartitionToOffsetAndMeta.put(tp, new OffsetAndMetadata(msgId.offset, msgId.buildMetadata(Thread.currentThread())));
+                ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset, msgId.metadata(Thread.currentThread())));
             }
 
-            kafkaConsumer.commitSync(topicPartitionToOffsetAndMeta);
+            kafkaConsumer.commitSync(ackedOffsets);
 
             cleanMap();
             // have to clean topic partitions if that is the case
@@ -172,28 +235,62 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private class OffsetManagerEntry {
+    private class OffsetEntry {
         private long lastCommittedOffset = 0;
-        private List<MessageId> offsetsSublist = new ArrayList<>();      // in root keep only two offsets - first and last
-        private OffsetManagerEntry prev;
-        private OffsetManagerEntry next;
+        private List<MessageId> offsets = new ArrayList<>();      // in root keep only two offsets - first and last
+        private OffsetEntry prev;
+        private OffsetEntry next;
 
-        public OffsetManagerEntry(OffsetManagerEntry prev, OffsetManagerEntry next) {
+        public OffsetEntry(OffsetEntry prev, OffsetEntry next) {
             this.prev = prev;
             this.next = next;
         }
 
-        public void ack(MessageId messageId) {
+        public void ack(MessageId msgId) {
+            ack(msgId, this);
             //do merge
-
         }
+
+        //TODO: Make it Iterative to be faster
+        private void ack(MessageId msgId, OffsetEntry offsetEntry) {
+            if (offsetEntry == null) {
+                return;
+            }
+
+            if (msgId.offset == (getLastOffset() + 1)) {    // msgId becomes last element of this sublist
+                setLast(msgId);
+            } else if (msgId.offset < getFirstOffset()) {   // msgId
+                setFirst(msgId);
+            } else {
+                ack(msgId, offsetEntry.next);
+            }
+            //TODO merge
+        }
+
 
         public MessageId getMaxOffsetMsgAcked() {
             MessageId msgId = null;
-            if (isRoot() && !offsetsSublist.isEmpty() && offsetsSublist.get(0).offset == lastCommittedOffset + 1) {
-                msgId = offsetsSublist.get(offsetsSublist.size() - 1);
+            if (isRoot() && !offsets.isEmpty() && offsets.get(0).offset == lastCommittedOffset + 1) {
+                msgId = offsets.get(offsets.size() - 1);
+                lastCommittedOffset = msgId.offset;
             }
             return msgId;
+        }
+
+        private long getLastOffset() {
+            return offsets.isEmpty() ? -1 : offsets.get(offsets.size() - 1).offset;
+        }
+
+        private long getFirstOffset() {
+            return offsets.isEmpty() ? -1 : offsets.get(0).offset;
+        }
+
+        private void setLast(MessageId msgId) {
+            offsets.set(offsets.isEmpty() ? 0 : offsets.size() - 1, msgId);
+        }
+
+        private void setFirst(MessageId msgId) {
+            offsets.set(0, msgId);
         }
 
         private boolean isRoot() {
@@ -276,10 +373,15 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     public long getMaxWaitTime() {
         return maxWaitTime;
     }
+
+
+
     private static class MessageId {
-        private String topic;
-        private int partition;
+        public static final OffsetComparator OFFSET_COMPARATOR = new OffsetComparator();
+        String topic;
+        int partition;
         private long offset;
+        int numFails = 0;
 
         public MessageId(ConsumerRecord consumerRecord) {
             this(consumerRecord.topic(), consumerRecord.partition(), consumerRecord.offset());
@@ -289,6 +391,19 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             this.topic = topic;
             this.partition = partition;
             this.offset = offset;
+        }
+
+        public void incNumFails() {
+            ++numFails;
+        }
+
+        public String metadata(Thread currThread) {
+            return "{" +
+                    "topic='" + topic + '\'' +
+                    ", partition=" + partition +
+                    ", offset=" + offset +
+                    ", thread='" + currThread.getName() + "'" +
+                    '}';
         }
 
         @Override
@@ -312,7 +427,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
             return topic.equals(messageId.topic);
         }
-
         @Override
         public int hashCode() {
             int result = topic.hashCode();
@@ -320,15 +434,13 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             result = 31 * result + (int) (offset ^ (offset >>> 32));
             return result;
         }
-        public String buildMetadata(Thread currThread) {
-            return "{" +
-                    "topic='" + topic + '\'' +
-                    ", partition=" + partition +
-                    ", offset=" + offset +
-                    ", thread='" + currThread.getName() + "'" +
-                    '}';
-        }
 
+        //TODO Delete
+        public static class OffsetComparator implements Comparator<Long> {
+            public int compare(Long l1, Long l2) {
+                return l1.compareTo(l2);
+            }
+        }
     }
 
     @Override
@@ -342,14 +454,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     public Fields getOutputFields() {
         return new Fields("kafka_field");
-    }
-
-    @Override
-    public void fail(Object msgId) {
-        final MessageId messageId = (MessageId) msgId;
-        final String metadata = messageId.buildMetadata(Thread.currentThread());
-
-        log.debug("Failed " + metadata);
     }
 
     @Override
