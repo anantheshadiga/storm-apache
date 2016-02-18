@@ -201,7 +201,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             msgIds.add(msgId);
 
             // limit to max number of retries
-            if (msgId.numFails >= maxRetries()) {
+            if (msgId.numFails() >= maxRetries()) {
                 log.debug("Reached the maximum number of retries. Adding message {[]} to list of messages to be committed to kafka", msgId);
                 ack(msgId);
                 msgIds.remove(msgId);
@@ -221,7 +221,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 for (MessageId msgId : failed.get(tp)) {
                     Values tuple = emittedTuples.get(msgId);
                     log.debug("Retrying tuple. [msgId={}, tuple={}]", msgId, tuple);
-                    collector.emit(getStreamId(tp), tuple, msgId);
+                    collector.emit(getStreamId(), tuple, msgId);
                 }
             }
         }
@@ -231,7 +231,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             final Map<TopicPartition, OffsetAndMetadata> ackedOffsets = new HashMap<>();
             for (TopicPartition tp : acked.keySet()) {
                 final MessageId msgId = acked.get(tp).getMaxOffsetMsgAcked();
-                ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset, msgId.metadata(Thread.currentThread())));
+                ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset(), msgId.metadata(Thread.currentThread())));
             }
 
             kafkaConsumer.commitSync(ackedOffsets);
@@ -288,11 +288,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 return;
             }
 
-            if (offsets.isEmpty() || msgId.offset == (getLastOffset() + 1)) {           // msgId becomes last element of this offsets sublist
+            if (offsets.isEmpty() || msgId.offset() == (getLastOffset() + 1)) {           // msgId becomes last element of this offsets sublist
                 setLast(msgId);
-            } else if (msgId.offset == (getFirstOffset() - 1)) {   // msgId becomes first element of this offsets sublist
+            } else if (msgId.offset() == (getFirstOffset() - 1)) {   // msgId becomes first element of this offsets sublist
                 setFirst(msgId);
-            } else if (msgId.offset < getFirstOffset()) {           // insert a new OffsetEntry element in the list
+            } else if (msgId.offset() < getFirstOffset()) {           // insert a new OffsetEntry element in the list
                 OffsetEntry newEntry = new OffsetEntry(this.prev, this);
                 this.prev.next = newEntry;
                 this.prev = newEntry;
@@ -306,19 +306,19 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         public MessageId getMaxOffsetMsgAcked() {       //TODO Rename this method
             MessageId msgId = null;
-            if (isHead() && !offsets.isEmpty() && offsets.get(0).offset == lastCommittedOffset + 1) {
+            if (isHead() && !offsets.isEmpty() && offsets.get(0).offset() == lastCommittedOffset + 1) {
                 msgId = offsets.get(offsets.size() - 1);
-                lastCommittedOffset = msgId.offset;
+                lastCommittedOffset = msgId.offset();
             }
             return msgId;
         }
 
         private long getLastOffset() {
-            return offsets.isEmpty() ? -1 : offsets.get(offsets.size() - 1).offset;
+            return offsets.isEmpty() ? -1 : offsets.get(offsets.size() - 1).offset();
         }
 
         private long getFirstOffset() {
-            return offsets.isEmpty() ? -1 : offsets.get(0).offset;
+            return offsets.isEmpty() ? -1 : offsets.get(0).offset();
         }
 
         private void setLast(MessageId msgId) {
@@ -355,91 +355,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-
-
-
-
-    private void serialize() {
-
-    }
-
-
-
-    private static class MessageId {
-        TopicPartition topicPart;
-        private long offset;
-        int numFails = 0;
-
-        public MessageId(ConsumerRecord consumerRecord) {
-            this(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()), consumerRecord.offset());
-        }
-
-        public MessageId(TopicPartition topicPart, long offset) {
-            this.topicPart = topicPart;
-            this.offset = offset;
-        }
-
-        public void incrementNumFails() {
-            ++numFails;
-        }
-
-        public int partition() {
-            return topicPart.partition();
-        }
-
-        public String topic() {
-            return topicPart.topic();
-        }
-
-        public TopicPartition getTopicPartition() {
-            return topicPart;
-        }
-
-        public String metadata(Thread currThread) {
-            return "{" +
-                    "topic='" + topic() + '\'' +
-                    ", partition=" + partition() +
-                    ", offset=" + offset +
-                    ", numFails=" + numFails +
-                    ", thread='" + currThread.getName() + "'" +
-                    '}';
-        }
-
-        @Override
-        public String toString() {
-            return "MessageId{" +
-                    "topic='" + topic() + '\'' +
-                    ", partition=" + partition() +
-                    ", offset=" + offset +
-                    ", numFails=" + numFails +
-                    '}';
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            MessageId messageId = (MessageId) o;
-            if (offset != messageId.offset) {
-                return false;
-            }
-            return topicPart.equals(messageId.topicPart);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = topicPart.hashCode();
-            result = 31 * result + (int) (offset ^ (offset >>> 32));
-            return result;
-        }
-    }
-
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
+        declarer.declare();
         if (kafkaSpoutStrategy.getDeclaredStreamsAndOutputFields() != null)     //TODO
             declarer.declare(getOutputFields());
         else {
