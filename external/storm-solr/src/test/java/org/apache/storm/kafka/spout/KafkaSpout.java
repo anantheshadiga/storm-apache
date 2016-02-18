@@ -141,7 +141,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             }
 
             final OffsetEntry offsetEntry = acked.get(tp);
-            offsetEntry.ack(msgId);
+            offsetEntry.insert(msgId);
 
             // Removed acked tuples from the emittedTuples data structure
             emittedTuples.remove(msgId);
@@ -212,7 +212,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private class OffsetEntry {
+    private final class OffsetEntry {
         private long lastCommittedOffset = 0;
         private List<MessageId> offsets = new ArrayList<>();      // in root keep only two offsets - first and last
         private OffsetEntry prev;
@@ -223,37 +223,51 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             this.next = next;
         }
 
-        public void ack(MessageId msgId) {
-            ack(msgId, this);
+        public void insert(MessageId msgId) {
+            insert(msgId, this);
             merge();
         }
 
         private void merge() {
-
+            while (this.next != null && (this.getLastOffset() - this.next.getFirstOffset()) == 1) {
+                offsets.addAll(this.next.offsets);
+                deleteEntry(this.next);
+            }
         }
 
+        private void deleteEntry(OffsetEntry entry) {
+            if (entry.prev != null) {
+                entry.prev.next = entry.next;
+            }
+            if (entry.next != null) {
+                entry.next.prev = entry.prev;
+            }
+            entry.prev = null;
+            entry.next = null;
+        }
+
+
         //TODO: Make it Iterative to be faster
-        private void ack(MessageId msgId, OffsetEntry offsetEntry) {
+        private void insert(MessageId msgId, OffsetEntry offsetEntry) {
             if (offsetEntry == null) {
                 return;
             }
 
-            if (msgId.offset == (getLastOffset() + 1)) {    // msgId becomes last element of this sublist
+            if (msgId.offset == (getLastOffset() + 1)) {           // msgId becomes last element of this offsets sublist
                 setLast(msgId);
-            } else if (msgId.offset == (getFirstOffset() - 1)) {   // msgId becomes first element of this sublist
+            } else if (msgId.offset == (getFirstOffset() - 1)) {   // msgId becomes first element of this offsets sublist
                 setFirst(msgId);
-            } else if (msgId.offset < getFirstOffset()) {
-                OffsetEntry newEntry = new OffsetEntry(this, this.next);
-                this.next.prev = newEntry;
-                this.next = newEntry;
+            } else if (msgId.offset < getFirstOffset()) {           // insert a new OffsetEntry element in the list
+                OffsetEntry newEntry = new OffsetEntry(this.prev, this);
+                this.prev.next = newEntry;
+                this.prev = newEntry;
                 newEntry.setFirst(msgId);
                 return;
                 // insert and return
             }
 
-            ack(msgId, offsetEntry.next);
+            insert(msgId, offsetEntry.next);
         }
-
 
         public MessageId getMaxOffsetMsgAcked() {       //TODO Rename this method
             MessageId msgId = null;
@@ -291,7 +305,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                     ", offsets=" + offsets +
                     ", prev=" + prev +
                     ", next=" + next +
-                    ", maxOffset=" + maxOffset +
                     '}';
         }
 
