@@ -23,8 +23,9 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.kafka.spout.strategy.KafkaConfig;
-import org.apache.storm.kafka.spout.strategy.StreamBuilder;
+import org.apache.storm.kafka.spout.strategy.KafkaSpoutConfig;
+import org.apache.storm.kafka.spout.strategy.KafkaStream;
+import org.apache.storm.kafka.spout.strategy.KafkaTupleBuilder;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
@@ -40,6 +41,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class KafkaSpout<K,V> extends BaseRichSpout {
     private static final Logger log = LoggerFactory.getLogger(KafkaSpout.class);
@@ -50,16 +56,18 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     protected SpoutOutputCollector collector;
 
     // Kafka
-    private final KafkaConfig<K, V> kafkaConfig;
+    private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
     private KafkaConsumer<K, V> kafkaConsumer;
-    Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked
 
     // Bookkeeping
     private OffsetsManager offsetsManager;
-    private StreamBuilder<K,V> streamBuilder;
+    Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked
+    private KafkaStream<K,V> kafkaStream;
+    private ScheduledExecutorService offsetsCommitTimer;
+    private KafkaTupleBuilder<K,V> kafkaTupleBuilder;
 
-    public KafkaSpout(KafkaConfig<K,V> kafkaConfig) {
-        this.kafkaConfig = kafkaConfig;                 // Pass in configuration
+    public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig) {
+        this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
     }
 
     @Override
@@ -67,23 +75,32 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         this.conf = conf;
         this.context = context;
         this.collector = collector;
-        kafkaConsumer = new KafkaConsumer<>(kafkaConfig.getConfigs(), kafkaConfig.getKeyDeserializer(), kafkaConfig.getValueDeserializer());
+        kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(), kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
         offsetsManager = new OffsetsManager();
         emittedTuples = new HashMap<>();
 
-
-
-        List<String> topics = new ArrayList<>();    // TODO
+      /*  List<String> topics = new ArrayList<>();    // TODO
         subscribe(kafkaConsumer);
-        kafkaConsumer.subscribe(topics);
+        kafkaConsumer.subscribe(topics);*/
+
+        setOffsetsCommitTask();
+    }
+
+    /***/
+    private void setOffsetsCommitTask() {
+        offsetsCommitTimer = Executors.newSingleThreadScheduledExecutor();
+        offsetsCommitTimer.schedule(new Runnable() {
+            @Override
+            public void run() {
+                commitAckedRecords();
+            }
+        }, 100, TimeUnit.MILLISECONDS);
     }
 
     //TODO HANDLE PARALLELISM
 //    String topologyMaxSpoutPending = Config.TOPOLOGY_MAX_SPOUT_PENDING;
     @Override
     public void nextTuple() {
-        commitAckedRecords();
-
         if (retry()) {
             retryFailedTuples();
         } else {
@@ -105,14 +122,16 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     //TODO: Null message id for no acking, which is good to use with enable.auto.commit=false
     private void pollNewRecordsAndEmitTuples() {
-        ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaConfig.getPollTimeout());
+        ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeout());
+
         log.debug("Polled {[]} records from Kafka", consumerRecords.count());
+
         for (TopicPartition tp : consumerRecords.partitions()) {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if emmit per topic or per partition
             for (ConsumerRecord<K, V> record : records) {
-                final Values tuple = buildTuple(tp, record);
-                final MessageId messageId = createMessageId(record);
-                collector.emit(getStreamId(tp), tuple, messageId);      // emits one tuple per record
+                final Values tuple = kafkaTupleBuilder.buildTuple(tp, record);
+                final MessageId messageId = createMessageId(record);            //TODO don't create message for
+                collector.emit(getStreamId(), tuple, messageId);          // emits one tuple per record
                 emittedTuples.put(messageId, tuple);
             }
         }
@@ -130,18 +149,33 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         offsetsManager.fail((MessageId) msgId);
     }
 
+    private MessageId createMessageId(ConsumerRecord<K,V> consumerRecord) {
+        return new MessageId(consumerRecord);
+    }
+    private String getStreamId() {
+        return kafkaStream.getStreamId();
+    }
+
+    private final Lock ackedLock = new ReentrantLock();
+
     private class OffsetsManager {
         Map<TopicPartition, OffsetEntry> acked = new HashMap<>();
         final Map<TopicPartition, Set<MessageId>> failed = new HashMap<>();
 
         public void ack(MessageId msgId) {
             final TopicPartition tp = msgId.getTopicPartition();
-            if (!acked.containsKey(tp)) {
-                acked.put(tp, new OffsetEntry(null, null));
-            }
 
-            final OffsetEntry offsetEntry = acked.get(tp);
-            offsetEntry.insert(msgId);
+            ackedLock.lock();
+            try {
+                if (!acked.containsKey(tp)) {
+                    acked.put(tp, new OffsetEntry(null, null));
+                }
+
+                final OffsetEntry offsetEntry = acked.get(tp);
+                offsetEntry.insert(msgId);
+            } finally {
+                ackedLock.unlock();
+            }
 
             // Removed acked tuples from the emittedTuples data structure
             emittedTuples.remove(msgId);
@@ -177,8 +211,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             }
         }
 
+
         public boolean retry() {
-            return failed.size() != 0;
+            return failed.size() > 0;
         }
 
         public void retryFailed() {
@@ -253,7 +288,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 return;
             }
 
-            if (msgId.offset == (getLastOffset() + 1)) {           // msgId becomes last element of this offsets sublist
+            if (offsets.isEmpty() || msgId.offset == (getLastOffset() + 1)) {           // msgId becomes last element of this offsets sublist
                 setLast(msgId);
             } else if (msgId.offset == (getFirstOffset() - 1)) {   // msgId becomes first element of this offsets sublist
                 setFirst(msgId);
@@ -320,21 +355,15 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord) {
-        return streamBuilder.buildTuple(topicPartition, consumerRecord);
-    }
 
-    private MessageId createMessageId(ConsumerRecord<K,V> consumerRecord) {
-        return new MessageId(consumerRecord);
-    }
+
+
 
     private void serialize() {
 
     }
 
-    private String getStreamId(TopicPartition topicPartition) {
-        return streamBuilder.getStream(topicPartition);
-    }
+
 
     private static class MessageId {
         TopicPartition topicPart;

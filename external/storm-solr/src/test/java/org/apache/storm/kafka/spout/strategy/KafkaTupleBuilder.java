@@ -20,24 +20,7 @@ package org.apache.storm.kafka.spout.strategy;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 
-public abstract class StreamBuilder<K,V> {
-    private Fields outputFields;
-
-    public StreamBuilder(Fields outputFields) {
-        this.outputFields = outputFields;
-    }
-
-    public abstract Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord);
-
-    public String getStream(TopicPartition topicPartition) {
-        return topicPartition.topic() + "#" + topicPartition.partition();
-    }
-
-    public String getStream(String name) {
-        return name;
-    }
-
-}
+public interface KafkaTupleBuilder<K,V> {
+    Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord);

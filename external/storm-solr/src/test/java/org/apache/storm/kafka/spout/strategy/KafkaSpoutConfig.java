@@ -22,29 +22,30 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
 
-public class KafkaConfig<K, V> {
+public class KafkaSpoutConfig<K, V> {
     public static final long DEFAULT_POLL_TIMEOUT = 500;
 
-    private final Map<String, Object> configs;
+    private final Map<String, Object> kafkaProps;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private final long pollTimeout;
 
-    public KafkaConfig(Builder<K,V> builder) {
-        this.configs = builder.configs;
+    public KafkaSpoutConfig(Builder<K,V> builder) {
+        this.kafkaProps = builder.kafkaProps;
         this.keyDeserializer = builder.keyDeserializer;
         this.valueDeserializer = builder.valueDeserializer;
         this.pollTimeout = builder.pollTimeout;
     }
 
     public static class Builder<K,V> {
-        private Map<String, Object> configs;
+        private Map<String, Object> kafkaProps;
         private Deserializer<K> keyDeserializer;
         private Deserializer<V> valueDeserializer;
         private long pollTimeout = DEFAULT_POLL_TIMEOUT;
+        private long commitFreqMs = 15_000;
 
-        public void setConfigs(Map<String, Object> configs) {
-            this.configs = configs;
+        public Builder(Map<String, Object> kafkaProps) {
+            this.kafkaProps = kafkaProps;
         }
 
         public void setKeyDeserializer(Deserializer<K> keyDeserializer) {
@@ -59,13 +60,13 @@ public class KafkaConfig<K, V> {
             this.pollTimeout = pollTimeout;
         }
 
-        public KafkaConfig<K,V> build() {
-            return new KafkaConfig<>(this);
+        public KafkaSpoutConfig<K,V> build() {
+            return new KafkaSpoutConfig<>(this);
         }
     }
 
-    public Map<String, Object> getConfigs() {
-        return configs;
+    public Map<String, Object> getKafkaProps() {
+        return kafkaProps;
     }
 
     public Deserializer<K> getKeyDeserializer() {
