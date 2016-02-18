@@ -214,7 +214,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private class OffsetEntry {
         private long lastCommittedOffset = 0;
-        private long maxOffset = 0;
         private List<MessageId> offsets = new ArrayList<>();      // in root keep only two offsets - first and last
         private OffsetEntry prev;
         private OffsetEntry next;
@@ -226,7 +225,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         public void ack(MessageId msgId) {
             ack(msgId, this);
-            //do merge
+            merge();
+        }
+
+        private void merge() {
+
         }
 
         //TODO: Make it Iterative to be faster
@@ -239,12 +242,16 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 setLast(msgId);
             } else if (msgId.offset == (getFirstOffset() - 1)) {   // msgId becomes first element of this sublist
                 setFirst(msgId);
-            } else if () {
-
-            } else {
-                ack(msgId, offsetEntry.next);
+            } else if (msgId.offset < getFirstOffset()) {
+                OffsetEntry newEntry = new OffsetEntry(this, this.next);
+                this.next.prev = newEntry;
+                this.next = newEntry;
+                newEntry.setFirst(msgId);
+                return;
+                // insert and return
             }
-            //TODO merge
+
+            ack(msgId, offsetEntry.next);
         }
 
 
@@ -288,7 +295,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                     '}';
         }
 
-        public void printAllLevels() {
+        //TODO for debug
+        void printAllLevels() {
             printAllLevels(this);
         }
 
