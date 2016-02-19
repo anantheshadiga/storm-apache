@@ -54,25 +54,21 @@ public class KafkaBrokerTest {
     @Test
     public void main() {
         Properties props = getProperties();
-//        System.out.println("Before consumer ");
-//        System.err.println("Before consumer Err");
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
+//        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
         consumer.subscribe(Arrays.asList("test"));
-
-//        System.out.println("Before poll");
-//        System.err.println("Before poll Err");
-
-//        System.err.println("After poll");
         int i = 0;
         while (true) {
-            ConsumerRecords<String, String> records = consumer.poll(10000);
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(10000);
+//            ConsumerRecords<String, String> records = consumer.poll(10000);
             System.err.println("i = " + i);
             consumer.seek(new TopicPartition("test", 0), i++);
             if (i == 1) {
                 records = consumer.poll(10000);
                 consumer.commitAsync();
             }
-            for (ConsumerRecord<String, String> record : records) {
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+//            for (ConsumerRecord<String, String> record : records) {
 //                System.err.println("Inside Loop");
                 System.err.printf("offset = %d, key = %s, value = %s\n", record.offset(), record.key(), record.value());
             }
@@ -90,8 +86,10 @@ public class KafkaBrokerTest {
         props.put("enable.auto.commit", "true");
         props.put("auto.commit.interval.ms", "1000");
         props.put("session.timeout.ms", "30000");
-        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+//        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+//        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         return props;
     }
 }

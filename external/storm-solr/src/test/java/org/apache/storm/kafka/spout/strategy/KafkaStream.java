@@ -18,27 +18,23 @@
 
 package org.apache.storm.kafka.spout.strategy;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.tuple.Fields;
-import org.apache.storm.tuple.Values;
 import org.apache.storm.utils.Utils;
 
 public abstract class KafkaStream<K,V> {
-    private Fields outputFields;
-    private String streamId;
+    private final Fields outputFields;
+    private final String streamId;
 
-    /** Declare specified outputFields using default stream */
+    /** Declare specified outputFields with default stream */
     public KafkaStream(Fields outputFields) {
         this(outputFields, Utils.DEFAULT_STREAM_ID);
     }
 
+    /** Declare specified outputFields with specified stream */
     public KafkaStream(Fields outputFields, String streamId) {
         this.outputFields = outputFields;
         this.streamId = streamId;
     }
-
-    public abstract Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord);
 
     public Fields getOutputFields() {
         return outputFields;

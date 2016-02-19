@@ -24,3 +24,4 @@ import org.apache.storm.tuple.Values;
 
 public interface KafkaTupleBuilder<K,V> {
     Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord);
+}
