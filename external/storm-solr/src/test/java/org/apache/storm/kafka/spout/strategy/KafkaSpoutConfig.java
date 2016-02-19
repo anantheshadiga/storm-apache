@@ -24,6 +24,7 @@ import java.util.Map;
 
 public class KafkaSpoutConfig<K, V> {
     public static final long DEFAULT_POLL_TIMEOUT = 500;
+    public static String AUTO_COMMIT_ENABLE= "auto.commit.enable";
 
     private final Map<String, Object> kafkaProps;
     private final Deserializer<K> keyDeserializer;
@@ -79,5 +80,10 @@ public class KafkaSpoutConfig<K, V> {
 
     public long getPollTimeout() {
         return pollTimeout;
+    }
+
+    public boolean isAutoCommitMode() {
+        return kafkaProps == null || kafkaProps.get(AUTO_COMMIT_ENABLE) == null     // default is true
+                || ((String)kafkaProps.get(AUTO_COMMIT_ENABLE)).equalsIgnoreCase("true");
     }
 }

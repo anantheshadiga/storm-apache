@@ -21,17 +21,17 @@ package org.apache.storm.kafka.spout.strategy;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.Utils;
 
-public abstract class KafkaStream<K,V> {
+public class KafkaSpoutStreamDetails {
     private final Fields outputFields;
     private final String streamId;
 
     /** Declare specified outputFields with default stream */
-    public KafkaStream(Fields outputFields) {
+    public KafkaSpoutStreamDetails(Fields outputFields) {
         this(outputFields, Utils.DEFAULT_STREAM_ID);
     }
 
     /** Declare specified outputFields with specified stream */
-    public KafkaStream(Fields outputFields, String streamId) {
+    public KafkaSpoutStreamDetails(Fields outputFields, String streamId) {
         this.outputFields = outputFields;
         this.streamId = streamId;
     }

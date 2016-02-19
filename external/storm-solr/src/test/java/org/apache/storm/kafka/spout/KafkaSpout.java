@@ -18,23 +18,26 @@
 
 package org.apache.storm.kafka.spout;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.spout.strategy.KafkaSpoutConfig;
-import org.apache.storm.kafka.spout.strategy.KafkaStream;
+import org.apache.storm.kafka.spout.strategy.KafkaSpoutStreamDetails;
 import org.apache.storm.kafka.spout.strategy.KafkaTupleBuilder;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.base.BaseRichSpout;
-import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -44,6 +47,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class KafkaSpout<K,V> extends BaseRichSpout {
     private static final Logger log = LoggerFactory.getLogger(KafkaSpout.class);
+
+    private final Lock ackedLock = new ReentrantLock();     //TODO
+
+    //TODO Manage leaked connections
 
     // Storm
     private Map conf;
@@ -55,10 +62,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private KafkaConsumer<K, V> kafkaConsumer;
 
     // Bookkeeping
+    private ScheduledExecutorService commitOffsetsTask;
     private OffsetsManager offsetsManager;
-    Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked
-    private KafkaStream<K,V> kafkaStream;
-    private ScheduledExecutorService offsetsCommitTimer;
+    private Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked
+    private KafkaSpoutStreamDetails kafkaStream;
     private KafkaTupleBuilder<K,V> kafkaTupleBuilder;
 
     public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig) {
@@ -70,21 +77,47 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         this.conf = conf;
         this.context = context;
         this.collector = collector;
-        kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(), kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
+        kafkaConsumer = new KafkaConsumer<K,V>(kafkaSpoutConfig.getKafkaProps(), kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
         offsetsManager = new OffsetsManager(this, kafkaConsumer);
         emittedTuples = new HashMap<>();
 
-      /*  List<String> topics = new ArrayList<>();    // TODO
-        subscribe(kafkaConsumer);
+
+        List<String> topics = new ArrayList<>();    // TODO
+        ConsumerRebalanceListener listener;
+        kafkaConsumer.subscribe(topics, new KafkaSpoutConsumerRebalanceListener());
+
+        /* subscribe(kafkaConsumer);
         kafkaConsumer.subscribe(topics);*/
 
-        setOffsetsCommitTask();
+        if (!kafkaSpoutConfig.isAutoCommitMode()) {
+            setCommitOffsetsTask();
+        }
     }
 
-    /***/
-    private void setOffsetsCommitTask() {
-        offsetsCommitTimer = Executors.newSingleThreadScheduledExecutor();
-        offsetsCommitTimer.schedule(new Runnable() {
+    private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            commitAckedRecords();  // commit acked records, remove all tuples in the failed list to make sure no duplicates occur
+            clearFailedTuples();
+        }
+
+
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+
+        }
+    }
+
+    private void clearFailedTuples() {
+        offsetsManager.clearFailedTuples();
+
+    }
+
+
+    private void setCommitOffsetsTask() {
+        commitOffsetsTask = Executors.newSingleThreadScheduledExecutor();
+        commitOffsetsTask.schedule(new Runnable() {
             @Override
             public void run() {
                 commitAckedRecords();
@@ -96,12 +129,17 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 //    String topologyMaxSpoutPending = Config.TOPOLOGY_MAX_SPOUT_PENDING;
     @Override
     public void nextTuple() {
-        if (retry()) {
+        if (retry()) {              // Don't process new tuples until the failed tuples have been acked
             retryFailedTuples();
         } else {
             emitTuples(poll());
-            pollNewRecordsAndEmitTuples();
         }
+    }
+
+    private ConsumerRecords<K, V> poll() {
+        final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeout());
+        log.debug("Polled {[]} records from Kafka", consumerRecords.count());
+        return consumerRecords;
     }
 
     private void emitTuples(ConsumerRecords<K, V> consumerRecords) {
@@ -109,8 +147,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if emmit per topic or per partition
             for (ConsumerRecord<K, V> record : records) {
                 final Values tuple = kafkaTupleBuilder.buildTuple(tp, record);
-                final MessageId messageId = createMessageId(record);            //TODO don't create message for
-                collector.emit(kafkaStream.getStreamId(), tuple, messageId);          // emits one tuple per record
+                final MessageId messageId = createMessageId(record);                   // TODO don't create message for non acking mode?
+                collector.emit(kafkaStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 emittedTuples.put(messageId, tuple);
             }
         }
@@ -128,29 +166,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         offsetsManager.commitAckedOffsets();
     }
 
-    private ConsumerRecords<K, V> poll() {
-        final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeout());
-        log.debug("Polled {[]} records from Kafka", consumerRecords.count());
-        return consumerRecords;
-    }
-
-    //TODO: Null message id for no acking, which is good to use with enable.auto.commit=false
-    private void pollNewRecordsAndEmitTuples() {
-        ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeout());
-
-        log.debug("Polled {[]} records from Kafka", consumerRecords.count());
-
-        for (TopicPartition tp : consumerRecords.partitions()) {
-            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if emmit per topic or per partition
-            for (ConsumerRecord<K, V> record : records) {
-                final Values tuple = kafkaTupleBuilder.buildTuple(tp, record);
-                final MessageId messageId = createMessageId(record);            //TODO don't create message for
-                collector.emit(kafkaStream.getStreamId(), tuple, messageId);          // emits one tuple per record
-                emittedTuples.put(messageId, tuple);
-            }
-        }
-    }
-
     @Override
     public void ack(Object msgId) {
         offsetsManager.ack((MessageId) msgId);
@@ -166,22 +181,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private MessageId createMessageId(ConsumerRecord<K,V> consumerRecord) {
         return new MessageId(consumerRecord);
     }
-    private String getStreamId() {
-        return kafkaStream.getStreamId();
-    }
-
-    private final Lock ackedLock = new ReentrantLock();
-
-
 
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declareStream(kafkaStream.getStreamId(), kafkaStream.getOutputFields());
     }
-
-    public Fields getOutputFields() {
-        return new Fields();
-    }   TODO
 
     @Override
     public void activate() {
