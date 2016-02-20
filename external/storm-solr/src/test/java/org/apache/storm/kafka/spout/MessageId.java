@@ -21,10 +21,8 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Comparator;
-
 public class MessageId {
-    private final Comparator<Long> OFFSET_COMPARATOR = new OffsetComparator();
+
 
     private TopicPartition topicPart;
     private long offset;
@@ -63,7 +61,7 @@ public class MessageId {
         return topicPart;
     }
 
-    public String metadata(Thread currThread) {
+    public String getMetadata(Thread currThread) {
         return "{" +
                 "topic='" + topic() + '\'' +
                 ", partition=" + partition() +
@@ -103,11 +101,5 @@ public class MessageId {
         int result = topicPart.hashCode();
         result = 31 * result + (int) (offset ^ (offset >>> 32));
         return result;
-    }
-
-    private class OffsetComparator implements Comparator<Long> {
-        public int compare(Long offset1, Long offset2) {
-            return offset1.compareTo(offset2);
-        }
     }
 }

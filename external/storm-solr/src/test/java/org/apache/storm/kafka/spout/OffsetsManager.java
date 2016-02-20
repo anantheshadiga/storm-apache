@@ -119,7 +119,7 @@ public class OffsetsManager<K,V> implements IOffsetsManager {
         final Map<TopicPartition, OffsetAndMetadata> ackedOffsets = new HashMap<>();
         for (TopicPartition tp : acked.keySet()) {
             final MessageId msgId = acked.get(tp).getMaxOffsetMsgAcked();
-            ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset(), msgId.metadata(Thread.currentThread())));
+            ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset(), msgId.getMetadata(Thread.currentThread())));
         }
 
         kafkaSpout.kafkaConsumer.commitSync(ackedOffsets);

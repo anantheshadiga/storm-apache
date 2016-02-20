@@ -27,6 +27,7 @@ import org.apache.storm.tuple.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -35,6 +36,7 @@ import java.util.TreeSet;
 
 public class SimpleOffsetsManager implements IOffsetsManager {
     private static final Logger log = LoggerFactory.getLogger(SimpleOffsetsManager.class);
+    private final Comparator<MessageId> OFFSET_COMPARATOR = new OffsetComparator();
 
     private transient final KafkaConsumer kafkaConsumer;
     // Keeps a list of emitted tuples that are pending ack. Tuples are removed from this list only after being acked
@@ -54,51 +56,71 @@ public class SimpleOffsetsManager implements IOffsetsManager {
         acked = new HashMap<>();
     }
 
+    private static class OffsetComparator implements Comparator<MessageId> {
+        public int compare(MessageId m1, MessageId m2) {
+            return m1.offset() < m2.offset() ? -1 : m1.offset() == m2.offset() ? 0 : 1;
+        }
+    }
 
     private class OffsetEntry {
-        private long largestCommittedOffset = 0;
-        private Set<MessageId> ackedMsgs = new TreeSet<>();
+        private long committedOffset = -1;          // last offset committed to Kafka
+        private long toCommitOffset;                // last offset to be committed in the next commit operation
+        private final Set<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);    // sort messages by ascending order of offset
+        private Set<MessageId> toCommitMsgs;        // Messages that contain the offsets to be committed in thee next commit operation
 
-        public void add(MessageId msgId) {
+        public void add(MessageId msgId) {          // O(Log N)
             ackedMsgs.add(msgId);
         }
 
-        public long getLargestCommittedOffset() {
-            return largestCommittedOffset;
-        }
+        /**
+         * This method has side effects. updateState method should be call after this method.
+         */
+        public OffsetAndMetadata findOffsetToCommit() {
+            long currOffset;
+            OffsetAndMetadata offsetAndMetadata = null;
+            toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
+            toCommitOffset = committedOffset;
+            MessageId toCommitMsg = null;
 
-        public void setLargestCommittedOffset(long largestCommittedOffset) {
-            this.largestCommittedOffset = largestCommittedOffset;
-        }
-
-        public void getLargestOffsetReadyToCommit() {
-
-        }
-
-        public OffsetAndMetadata commitAckedOffsets() {
-            OffsetAndMetadata omdta;
-
-            long prevOffset;
-
-            for (MessageId ackedMsg : ackedMsgs) {
-
+            int i = 0;
+            for (MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
+                if (i == 0 && ackedMsg.offset() > committedOffset + 1) { // if first acked offset found is not the next offset to be committed,
+                    break;                                               // then the next offset to be committed has not been acked yet and nothing can be committed
+                } else if ((currOffset = ackedMsg.offset()) == toCommitOffset + 1) {    // found the next offset to commit
+                    toCommitMsgs.add(ackedMsg);
+                    toCommitOffset = currOffset;
+                    toCommitMsg = ackedMsg;
+                    i++;
+                } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
+                    break;
+                } else if (ackedMsg.offset() < toCommitOffset) {
+                    log.debug("Unexpected offset found {[]}. Last committed offset {[]}",
+                            ackedMsg.offset(), committedOffset);
+                    break;
+                }
             }
 
-            final Map<TopicPartition, OffsetAndMetadata> ackedOffsets = new HashMap<>();
-            for (TopicPartition tp : acked.keySet()) {
-                OffsetEntry offsetEntry = acked.get(tp);
-
-
-                final MessageId msgId = acked.get(tp).getMaxOffsetMsgAcked();
-                ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset(), msgId.metadata(Thread.currentThread())));
+            if (!toCommitMsgs.isEmpty()) {
+                offsetAndMetadata = new OffsetAndMetadata(toCommitOffset, toCommitMsg.getMetadata(Thread.currentThread()));
             }
 
-            kafkaConsumer.commitSync(ackedOffsets);
-            log.debug("Offsets successfully committed to Kafka {[]}", ackedOffsets);
+            // TODO
+            // no messages;
+            // found all the way to the last message
 
-            // All acked offsets have been committed, so clean data structure
-            acked = new HashMap<>();
+            return offsetAndMetadata;
         }
+
+        /**
+         * This method has side effects and should be called after findOffsetToCommit
+         */
+        public void updateState(OffsetAndMetadata offsetAndMetadata) {
+            //TODO offsets
+            committedOffset = offsetAndMetadata.offset();
+            ackedMsgs.removeAll(toCommitMsgs);
+            toCommitMsgs = null;
+        }
+
     }
 
     @Override
@@ -161,7 +183,7 @@ public class SimpleOffsetsManager implements IOffsetsManager {
 
     @Override
     public void retryFailed() {
-        for (TopicPartition tp: failed.keySet()) {
+        for (TopicPartition tp : failed.keySet()) {
             for (MessageId msgId : failed.get(tp)) {
                 final Values tuple = emittedTuples.get(msgId);
                 log.debug("Retrying tuple. [msgId={}, tuple={}]", msgId, tuple);
@@ -172,18 +194,25 @@ public class SimpleOffsetsManager implements IOffsetsManager {
 
     @Override
     public void commitAckedOffsets() {
-        final Map<TopicPartition, OffsetAndMetadata> ackedOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetAndMetadata> toCommitOffsets = new HashMap<>();
         for (TopicPartition tp : acked.keySet()) {
             OffsetEntry offsetEntry = acked.get(tp);
-            offsetEntry.commitAckedOffsets();
-
-
-            final MessageId msgId = acked.get(tp).getMaxOffsetMsgAcked();
-            ackedOffsets.put(tp, new OffsetAndMetadata(msgId.offset(), msgId.metadata(Thread.currentThread())));
+            OffsetAndMetadata offsetAndMetadata = offsetEntry.findOffsetToCommit();
+            if (offsetAndMetadata != null) {
+                toCommitOffsets.put(tp, offsetAndMetadata);
+            }
         }
 
-        kafkaConsumer.commitSync(ackedOffsets);
-        log.debug("Offsets successfully committed to Kafka {[]}", ackedOffsets);
+        kafkaConsumer.commitSync(toCommitOffsets);
+        log.debug("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
+
+
+        // Instead of iterating again, the other option would be to commit each TopicPartition and update in the same iteration,
+        // but the multiple networks calls should be more expensive than iteration twice over a small loop
+        for (TopicPartition tp : acked.keySet()) {
+            OffsetEntry offsetEntry = acked.get(tp);
+            offsetEntry.updateState(toCommitOffsets.get(tp));
+        }
 
         // All acked offsets have been committed, so clean data structure
         acked = new HashMap<>();
