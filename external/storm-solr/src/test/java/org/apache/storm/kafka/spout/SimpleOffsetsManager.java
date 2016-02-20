@@ -73,7 +73,7 @@ public class SimpleOffsetsManager implements IOffsetsManager {
         }
 
         /**
-         * This method has side effects. The method updateState should be called after this method.
+         * This method has side effects. The method updateAckedState should be called after this method.
          */
         public OffsetAndMetadata findOffsetToCommit() {
             long currOffset;

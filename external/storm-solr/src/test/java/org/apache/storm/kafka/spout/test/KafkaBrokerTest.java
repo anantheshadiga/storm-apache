@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.Random;
+import java.util.TreeSet;
 
 /**
  * Unit test for simple KafkaBrokerTest.
@@ -76,6 +78,50 @@ public class KafkaBrokerTest {
         }
 //        System.err.println("Exit");
     }
+
+    @Test
+    public void testTreeSetConcurrent() throws Exception{
+        TreeSet<Integer> tsi = new TreeSet<>();
+        for (int i = 0; i < 10000; i++) {
+            tsi.add(i);
+        }
+
+        Thread t1 = new Thread(new TreeSetPrint(tsi));
+        Thread t2 = new Thread(new TreeSetAdd(tsi));
+        t1.start();
+        t2.start();
+    }
+
+    private class TreeSetPrint implements Runnable {
+        TreeSet<Integer> tsi;
+
+        public TreeSetPrint(TreeSet<Integer> tsi) {
+            this.tsi = tsi;
+        }
+
+        @Override
+        public void run() {
+            for (Integer i : tsi) {
+                System.out.println("integer = " + i);
+            }
+        }
+    }
+
+    private class TreeSetAdd implements Runnable {
+        TreeSet<Integer> tsi;
+
+        public TreeSetAdd(TreeSet<Integer> tsi) {
+            this.tsi = tsi;
+        }
+
+        @Override
+        public void run() {
+            int i = new Random().nextInt(100_000);
+            System.out.println("Adding i = " + i);
+            tsi.add(i);
+        }
+    }
+
 
     private Properties getProperties() {
         Properties props = new Properties();

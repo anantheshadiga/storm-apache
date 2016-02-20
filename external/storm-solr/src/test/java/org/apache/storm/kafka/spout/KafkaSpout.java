@@ -111,7 +111,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            commitAckedRecords();  // commit acked records,
+            commitAckedTuples();  // commit acked records,
             clearFailedTuples();   // remove all failed tuples form list to avoid duplication
             //TODO Racing condition when rebalance happens
         }
@@ -133,7 +133,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         commitOffsetsTask.schedule(new Runnable() {
             @Override
             public void run() {
-                commitAckedRecords();
+                commitAckedTuples();
             }
         }, kafkaSpoutConfig.getCommitFreqMs(), TimeUnit.MILLISECONDS);
     }
@@ -181,7 +181,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private void commitAckedRecords() {
+    private void commitAckedTuples() {
         final Map<TopicPartition, OffsetAndMetadata> toCommitOffsets = new HashMap<>();
 
         LOG.debug("Committing acked offsets to Kafka");
@@ -202,21 +202,21 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         kafkaConsumer.commitSync(toCommitOffsets);
         LOG.debug("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
 
-        // Instead of iterating again, the other option would be to commit each TopicPartition prior loop,
+        // Instead of iterating again, we could commit each TopicPartition in the prior loop,
         // but the multiple networks calls should be more expensive than iteration twice over a small loop
         ackedLock.lock();
         try {
             for (TopicPartition tp : acked.keySet()) {
                 OffsetEntry offsetEntry = acked.get(tp);
-                offsetEntry.updateState(toCommitOffsets.get(tp));
-                updateState(tp, offsetEntry);
+                offsetEntry.updateAckedState(toCommitOffsets.get(tp));
+                updateAckedState(tp, offsetEntry);
             }
         } finally {
             ackedLock.unlock();
         }
     }
 
-    private void updateState(TopicPartition tp, OffsetEntry offsetEntry) {
+    private void updateAckedState(TopicPartition tp, OffsetEntry offsetEntry) {
         if (offsetEntry.isEmpty()) {
             acked.remove(tp);
         }
@@ -233,8 +233,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             if (!acked.containsKey(tp)) {
                 acked.put(tp, new OffsetEntry());
             }
-            final OffsetEntry offsetEntry = acked.get(tp);
-            offsetEntry.add(msgId);
+            acked.get(tp).add(msgId);;
         } finally {
             ackedLock.unlock();
         }
@@ -242,7 +241,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         // Removed acked tuples from the emittedTuples data structure
         emittedTuples.remove(msgId);
 
-        // if ackedMsgs message is a retry, remove it from failed data structure
+        // if this acked msg is a retry, remove it from failed data structure
         if (failed.containsKey(tp)) {
             final Set<MessageId> msgIds = failed.get(tp);
             msgIds.remove(msgId);
@@ -301,7 +300,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     public void close() {
         try {
             kafkaConsumer.wakeup();
-            commitAckedRecords();
+            commitAckedTuples();
         } finally {
             //remove resources
             kafkaConsumer.close();
@@ -327,7 +326,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
 
         /**
-         * This method has side effects. The method updateState should be called after this method.
+         * This method has side effects. The method updateAckedState should be called after this method.
          */
         public OffsetAndMetadata findOffsetToCommit() {
             long currOffset;
@@ -363,7 +362,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         /**
          * This method has side effects and should be called after findOffsetToCommit
          */
-        public void updateState(OffsetAndMetadata offsetAndMetadata) {
+        public void updateAckedState(OffsetAndMetadata offsetAndMetadata) {
             committedOffset = offsetAndMetadata.offset();
             toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
             ackedMsgs.removeAll(toCommitMsgs);
