@@ -84,8 +84,8 @@ public class SimpleOffsetsManager implements IOffsetsManager {
 
             int i = 0;
             for (MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
-                if (i == 0 && ackedMsg.offset() > committedOffset + 1) { // if first acked offset found is not the next offset to be committed,
-                    break;                                               // then the next offset to be committed has not been acked yet and nothing can be committed
+                if (i == 0 && ackedMsg.offset() > committedOffset + 1) { // the first acked offset found is not the next offset to be committed,
+                    break;                                               // so the next offset to be committed has not been acked yet and nothing can be committed
                 } else if ((currOffset = ackedMsg.offset()) == toCommitOffset + 1) {    // found the next offset to commit
                     toCommitMsgs.add(ackedMsg);
                     toCommitOffset = currOffset;
@@ -93,7 +93,7 @@ public class SimpleOffsetsManager implements IOffsetsManager {
                     i++;
                 } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
                     break;
-                } else if (ackedMsg.offset() < toCommitOffset) {
+                } else {
                     log.debug("Unexpected offset found {[]}. Last committed offset {[]}",
                             ackedMsg.offset(), committedOffset);
                     break;
@@ -102,8 +102,12 @@ public class SimpleOffsetsManager implements IOffsetsManager {
 
             if (!toCommitMsgs.isEmpty()) {
                 offsetAndMetadata = new OffsetAndMetadata(toCommitOffset, toCommitMsg.getMetadata(Thread.currentThread()));
+                log.debug("Last offset to be committed in the next commit call: {[]}", offsetAndMetadata.offset());
+                log.trace(toString());
+            } else {
+                log.debug("No offsets found ready to commit" );
+                log.trace(toString());
             }
-
             // TODO
             // no messages;
             // found all the way to the last message
@@ -121,6 +125,15 @@ public class SimpleOffsetsManager implements IOffsetsManager {
             toCommitMsgs = null;
         }
 
+        @Override
+        public String toString() {
+            return "OffsetEntry{" +
+                    "committedOffset=" + committedOffset +
+                    ", toCommitOffset=" + toCommitOffset +
+                    ", ackedMsgs=" + ackedMsgs +
+                    ", toCommitMsgs=" + toCommitMsgs +
+                    '}';
+        }
     }
 
     @Override
