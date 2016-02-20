@@ -56,7 +56,7 @@ public class KafkaBrokerTest {
         Properties props = getProperties();
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
 //        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(Arrays.asList("test"));consumer.
+        consumer.subscribe(Arrays.asList("test"));
         int i = 0;
         while (true) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(10000);

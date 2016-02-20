@@ -18,29 +18,7 @@
 
 package org.apache.storm.kafka.spout.strategy;
 
-import org.apache.storm.tuple.Fields;
-import org.apache.storm.utils.Utils;
+public class KafkaConsumerWrapper {
 
-public class KafkaSpoutStreamDetails {
-    private final Fields outputFields;
-    private final String streamId;
 
-    /** Declare specified outputFields with default stream */
-    public KafkaSpoutStreamDetails(Fields outputFields) {
-        this(outputFields, Utils.DEFAULT_STREAM_ID);
-    }
-
-    /** Declare specified outputFields with specified stream */
-    public KafkaSpoutStreamDetails(Fields outputFields, String streamId) {
-        this.outputFields = outputFields;
-        this.streamId = streamId;
-    }
-
-    public Fields getOutputFields() {
-        return outputFields;
-    }
-
-    public String getStreamId() {
-        return streamId;
-    }
 }

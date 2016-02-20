@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.spout.strategy.KafkaSpoutConfig;
-import org.apache.storm.kafka.spout.strategy.KafkaSpoutStreamDetails;
+import org.apache.storm.kafka.spout.strategy.KafkaSpoutStream;
 import org.apache.storm.kafka.spout.strategy.KafkaTupleBuilder;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
@@ -35,12 +35,10 @@ import org.apache.storm.tuple.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -69,14 +67,14 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     // Bookkeeping
     private ScheduledExecutorService commitOffsetsTask;
     private IOffsetsManager offsetsManager;
-    private KafkaSpoutStreamDetails kafkaStream;
+    private KafkaSpoutStream kafkaStream;
     private KafkaTupleBuilder<K,V> kafkaTupleBuilder;
 
 
     private transient Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked or failed
     private transient Map<TopicPartition, Set<MessageId>> failed;     // failed tuples. They stay in this list until success or max retries is reached
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed by the commitOffsetsTask
-
+    private int maxRetries;
 
 
     public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig) {
@@ -96,17 +94,16 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         acked = new HashMap<>();
 
         // Kafka consumer
-        kafkaConsumer = new KafkaConsumer<K,V>(kafkaSpoutConfig.getKafkaProps(),
+        kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
                 kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
 
-        TODO
-        List<String> topics = new ArrayList<>();
-        ConsumerRebalanceListener listener;
-        kafkaConsumer.subscribe(topics, new KafkaSpoutConsumerRebalanceListener());
+        kafkaConsumer.subscribe(kafkaSpoutConfig.getTopics(), new KafkaSpoutConsumerRebalanceListener());
 
         if (!kafkaSpoutConfig.isAutoCommitMode()) {     // If it is auto commit, no need to commit offsets manually
             createCommitOffsetsTask();
         }
+
+        maxRetries = kafkaSpoutConfig.getMaxRetries()
 
         ackedLock = new ReentrantLock();
     }
@@ -121,14 +118,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            LOG.debug("Partition reassignment occurred. [consumer-group={}, topic-partitions=]", consumer, partitions);
-
+            LOG.debug("Partition reassignment occurred. [consumer-group={}, consumer={}, topic-partitions={}]",
+                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
         }
     }
-
-
-    private String getConsumer()
-
 
     private void clearFailedTuples() {
         failed = new HashMap<>();
@@ -142,7 +135,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             public void run() {
                 commitAckedRecords();
             }
-        }, 100, TimeUnit.MILLISECONDS);     //TODO Make this timeout configurable
+        }, kafkaSpoutConfig.getCommitFreqMs(), TimeUnit.MILLISECONDS);
     }
 
     //TODO HANDLE PARALLELISM
@@ -157,7 +150,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     }
 
     private ConsumerRecords<K, V> poll() {
-        final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeout());
+        final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
         LOG.debug("Polled {[]} records from Kafka", consumerRecords.count());
         return consumerRecords;
     }
@@ -191,6 +184,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private void commitAckedRecords() {
         final Map<TopicPartition, OffsetAndMetadata> toCommitOffsets = new HashMap<>();
 
+        LOG.debug("Committing acked offsets to Kafka");
         // lock because ack and commit happen in different threads
         ackedLock.lock();
         try {
@@ -208,7 +202,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         kafkaConsumer.commitSync(toCommitOffsets);
         LOG.debug("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
 
-        // Instead of iterating again, the other option would be to commit each TopicPartition and update in the same iteration,
+        // Instead of iterating again, the other option would be to commit each TopicPartition prior loop,
         // but the multiple networks calls should be more expensive than iteration twice over a small loop
         ackedLock.lock();
         try {
@@ -269,11 +263,15 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
 
         final Set<MessageId> msgIds = failed.get(tp);
-        msgId.incrementNumFails();        // increment number of failures counter
-        msgIds.add(msgId);
+        if (msgIds.contains(msgId)) {
+            msgIds.remove(msgId);
+        } else {
+            msgId.incrementNumFails();        // increment number of failures counter
+            msgIds.add(msgId);
+        }
 
         // limit to max number of retries
-        if (msgId.numFails() >= maxRetries()) {
+        if (msgId.numFails() >= maxRetries) {
             LOG.debug("Reached the maximum number of retries. Adding {[]} to list of messages to be committed to kafka", msgId);
             ack(msgId);
             msgIds.remove(msgId);
@@ -281,10 +279,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 failed.remove(tp);
             }
         }
-    }
-
-    private int maxRetries() {
-        TODO
     }
 
     @Override
@@ -299,6 +293,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void deactivate() {
+        kafkaConsumer.pause();
         //commit
     }
 

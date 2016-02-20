@@ -21,7 +21,7 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.kafka.spout.strategy.KafkaSpoutStreamDetails;
+import org.apache.storm.kafka.spout.strategy.KafkaSpoutStream;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.tuple.Values;
 import org.slf4j.Logger;
@@ -44,10 +44,10 @@ public class SimpleOffsetsManager implements IOffsetsManager {
     private transient final Map<TopicPartition, Set<MessageId>> failed;     // failed tuples. They stay in this list until success or max retries is reached
     private transient final Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed by the commitOffsetsTask
     private final SpoutOutputCollector collector;
-    private final KafkaSpoutStreamDetails kafkaStream;
+    private final KafkaSpoutStream kafkaStream;
 
 
-    public SimpleOffsetsManager(SpoutOutputCollector collector, KafkaSpoutStreamDetails kafkaStream, KafkaConsumer kafkaConsumer) {
+    public SimpleOffsetsManager(SpoutOutputCollector collector, KafkaSpoutStream kafkaStream, KafkaConsumer kafkaConsumer) {
         this.collector = collector;
         this.kafkaStream = kafkaStream;
         this.kafkaConsumer = kafkaConsumer;
