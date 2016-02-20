@@ -18,7 +18,11 @@
 
 package org.apache.storm.kafka.spout;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.tuple.Values;
+
+import java.util.Map;
+import java.util.Set;
 
 public interface IOffsetsManager {
     void ack(MessageId msgId);
@@ -32,4 +36,6 @@ public interface IOffsetsManager {
     void commitAckedOffsets();
 
     void  putEmitted(MessageId messageId, Values tuple);
+
+    Map<TopicPartition, Set<MessageId>> getFailed();
 }

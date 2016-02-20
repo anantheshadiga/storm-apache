@@ -22,8 +22,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 public class MessageId {
-
-
     private TopicPartition topicPart;
     private long offset;
     private int numFails = 0;
@@ -35,10 +33,6 @@ public class MessageId {
     public MessageId(TopicPartition topicPart, long offset) {
         this.topicPart = topicPart;
         this.offset = offset;
-    }
-
-    public void incrementNumFails() {
-        ++numFails;
     }
 
     public int partition() {
@@ -55,6 +49,10 @@ public class MessageId {
 
     public int numFails() {
         return numFails;
+    }
+
+    public void incrementNumFails() {
+        ++numFails;
     }
 
     public TopicPartition getTopicPartition() {
