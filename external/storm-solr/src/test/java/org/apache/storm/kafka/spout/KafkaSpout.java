@@ -123,7 +123,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             public void run() {
                 commitAckedRecords();
             }
-        }, 100, TimeUnit.MILLISECONDS);
+        }, 100, TimeUnit.MILLISECONDS);     //TODO Make this timeout configurable
     }
 
     //TODO HANDLE PARALLELISM

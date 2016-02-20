@@ -66,14 +66,14 @@ public class SimpleOffsetsManager implements IOffsetsManager {
         private long committedOffset = -1;          // last offset committed to Kafka
         private long toCommitOffset;                // last offset to be committed in the next commit operation
         private final Set<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);    // sort messages by ascending order of offset
-        private Set<MessageId> toCommitMsgs;        // Messages that contain the offsets to be committed in thee next commit operation
+        private Set<MessageId> toCommitMsgs= new TreeSet<>(OFFSET_COMPARATOR);        // Messages that contain the offsets to be committed in thee next commit operation
 
         public void add(MessageId msgId) {          // O(Log N)
             ackedMsgs.add(msgId);
         }
 
         /**
-         * This method has side effects. updateState method should be call after this method.
+         * This method has side effects. The method updateState should be called after this method.
          */
         public OffsetAndMetadata findOffsetToCommit() {
             long currOffset;
@@ -82,20 +82,15 @@ public class SimpleOffsetsManager implements IOffsetsManager {
             toCommitOffset = committedOffset;
             MessageId toCommitMsg = null;
 
-            int i = 0;
             for (MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
-                if (i == 0 && ackedMsg.offset() > committedOffset + 1) { // the first acked offset found is not the next offset to be committed,
-                    break;                                               // so the next offset to be committed has not been acked yet and nothing can be committed
-                } else if ((currOffset = ackedMsg.offset()) == toCommitOffset + 1) {    // found the next offset to commit
+                if ((currOffset = ackedMsg.offset()) == toCommitOffset + 1) {    // found the next offset to commit
                     toCommitMsgs.add(ackedMsg);
-                    toCommitOffset = currOffset;
                     toCommitMsg = ackedMsg;
-                    i++;
+                    toCommitOffset = currOffset;
                 } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
                     break;
                 } else {
-                    log.debug("Unexpected offset found {[]}. Last committed offset {[]}",
-                            ackedMsg.offset(), committedOffset);
+                    log.debug("Unexpected offset found {[]}. {}", ackedMsg.offset(), toString());
                     break;
                 }
             }
@@ -108,10 +103,6 @@ public class SimpleOffsetsManager implements IOffsetsManager {
                 log.debug("No offsets found ready to commit" );
                 log.trace(toString());
             }
-            // TODO
-            // no messages;
-            // found all the way to the last message
-
             return offsetAndMetadata;
         }
 
@@ -119,10 +110,12 @@ public class SimpleOffsetsManager implements IOffsetsManager {
          * This method has side effects and should be called after findOffsetToCommit
          */
         public void updateState(OffsetAndMetadata offsetAndMetadata) {
-            //TODO offsets
             committedOffset = offsetAndMetadata.offset();
+            toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
             ackedMsgs.removeAll(toCommitMsgs);
-            toCommitMsgs = null;
+            if (ackedMsgs.isEmpty())  {
+
+            }
         }
 
         @Override
@@ -207,6 +200,7 @@ public class SimpleOffsetsManager implements IOffsetsManager {
 
     @Override
     public void commitAckedOffsets() {
+        lock // TODO
         final Map<TopicPartition, OffsetAndMetadata> toCommitOffsets = new HashMap<>();
         for (TopicPartition tp : acked.keySet()) {
             OffsetEntry offsetEntry = acked.get(tp);
@@ -218,7 +212,6 @@ public class SimpleOffsetsManager implements IOffsetsManager {
 
         kafkaConsumer.commitSync(toCommitOffsets);
         log.debug("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
-
 
         // Instead of iterating again, the other option would be to commit each TopicPartition and update in the same iteration,
         // but the multiple networks calls should be more expensive than iteration twice over a small loop
