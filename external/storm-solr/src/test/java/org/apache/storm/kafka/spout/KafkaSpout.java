@@ -63,7 +63,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     // Bookkeeping
     private ScheduledExecutorService commitOffsetsTask;
-    private OffsetsManager offsetsManager;
+    private IOffsetsManager offsetsManager;
     private Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked
     private KafkaSpoutStreamDetails kafkaStream;
     private KafkaTupleBuilder<K,V> kafkaTupleBuilder;
@@ -80,7 +80,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         kafkaConsumer = new KafkaConsumer<K,V>(kafkaSpoutConfig.getKafkaProps(), kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
         offsetsManager = new OffsetsManager(this, kafkaConsumer);
         emittedTuples = new HashMap<>();
-
 
         List<String> topics = new ArrayList<>();    // TODO
         ConsumerRebalanceListener listener;
@@ -108,6 +107,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         }
     }
+
+
 
     private void clearFailedTuples() {
         offsetsManager.clearFailedTuples();
@@ -149,9 +150,13 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 final Values tuple = kafkaTupleBuilder.buildTuple(tp, record);
                 final MessageId messageId = createMessageId(record);                   // TODO don't create message for non acking mode?
                 collector.emit(kafkaStream.getStreamId(), tuple, messageId);           // emits one tuple per record
-                emittedTuples.put(messageId, tuple);
+                putEmitted(messageId, tuple);
             }
         }
+    }
+
+    private void putEmitted(MessageId messageId, Values tuple) {
+        offsetsManager.putEmitted(messageId, tuple);
     }
 
     private boolean retry() {

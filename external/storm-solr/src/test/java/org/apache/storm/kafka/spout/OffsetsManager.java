@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class OffsetsManager<K,V> {
+public class OffsetsManager<K,V> implements IOffsetsManager {
     protected static final Logger log = LoggerFactory.getLogger(OffsetsManager.class);
 
     private KafkaSpout kafkaSpout;
@@ -45,6 +45,7 @@ public class OffsetsManager<K,V> {
         this.kafkaConsumer = kafkaConsumer;
     }
 
+    @Override
     public void ack(MessageId msgId) {
         final TopicPartition tp = msgId.getTopicPartition();
 
@@ -73,6 +74,7 @@ public class OffsetsManager<K,V> {
         }
     }
 
+    @Override
     public void fail(MessageId msgId) {
         final TopicPartition tp = msgId.getTopicPartition();
         if (!failed.containsKey(tp)) {
@@ -95,10 +97,12 @@ public class OffsetsManager<K,V> {
     }
 
 
+    @Override
     public boolean retry() {
         return failed.size() > 0;
     }
 
+    @Override
     public void retryFailed() {
         for (TopicPartition tp: failed.keySet()) {
             for (MessageId msgId : failed.get(tp)) {
@@ -110,6 +114,7 @@ public class OffsetsManager<K,V> {
     }
 
     /** Commits to kafka the maximum sequence of continuous offsets that have been acked for a partition */
+    @Override
     public void commitAckedOffsets() {
         final Map<TopicPartition, OffsetAndMetadata> ackedOffsets = new HashMap<>();
         for (TopicPartition tp : acked.keySet()) {
