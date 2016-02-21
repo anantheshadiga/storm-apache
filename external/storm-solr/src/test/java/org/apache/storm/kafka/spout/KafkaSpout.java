@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -106,14 +107,25 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
+    // ======== Commit Offsets Task =======
+
     private void createCommitOffsetsTask() {
-        commitOffsetsTask = Executors.newSingleThreadScheduledExecutor();
+        commitOffsetsTask = Executors.newSingleThreadScheduledExecutor(commitOffsetsThreadFactory());
         commitOffsetsTask.schedule(new Runnable() {
             @Override
             public void run() {
                 commitAckedTuples();
             }
         }, kafkaSpoutConfig.getOffsetsCommitFreqMs(), TimeUnit.MILLISECONDS);
+    }
+
+    private ThreadFactory commitOffsetsThreadFactory() {
+        return new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                return new Thread(r, "kafka-spout-commit-offsets-thread");
+            }
+        };
     }
 
     // ======== Next Tuple =======
@@ -197,7 +209,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         ackCommitLock.lock();
         try {
             if (!acked.containsKey(tp)) {
-                acked.put(tp, new OffsetEntry());
+                acked.put(tp, new OffsetEntry(tp));
             }
             acked.get(tp).add(msgId);
         } finally {
@@ -336,6 +348,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         private long toCommitOffset;                // last offset to be committed in the next commit operation
         private final Set<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // sort messages by ascending order of offset
         private Set<MessageId> toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        // Messages that contain the offsets to be committed in the next commit operation
+
+        public OffsetEntry(TopicPartition tp) {
+            OffsetAndMetadata committed = kafkaConsumer.committed(tp);
+            committedOffset = committed == null ? -1 : committed.offset();
+        }
 
         public void add(MessageId msgId) {          // O(Log N)
             ackedMsgs.add(msgId);
