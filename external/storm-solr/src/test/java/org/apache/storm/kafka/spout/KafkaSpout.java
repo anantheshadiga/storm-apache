@@ -65,7 +65,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private transient ScheduledExecutorService commitOffsetsTask;
     private transient KafkaSpoutStream kafkaSpoutStream;
     private transient KafkaTupleBuilder<K,V> tupleBuilder;
-    private transient Lock ackedLock;
+    private transient Lock ackCommitLock;
 
 
     private transient Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked or failed
@@ -91,8 +91,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         emittedTuples = new HashMap<>();
         failed = new HashMap<>();
         acked = new HashMap<>();
-        ackedLock = new ReentrantLock();        //TODO
         blackList = new HashSet<>();
+        ackCommitLock = new ReentrantLock();
         maxRetries = kafkaSpoutConfig.getMaxTupleRetries();
 
         // Kafka consumer
@@ -135,10 +135,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private void emitTuples(ConsumerRecords<K, V> consumerRecords) {
         for (TopicPartition tp : consumerRecords.partitions()) {
-            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit per topic or per partition
+            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit/poll either per topic or per partition
             for (ConsumerRecord<K, V> record : records) {
                 final Values tuple = tupleBuilder.buildTuple(tp, record);
-                final MessageId messageId = new MessageId(record);                                  // TODO don't create message for non acking mode?
+                final MessageId messageId = new MessageId(record);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
                 collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 emittedTuples.put(messageId, tuple);
             }
@@ -184,8 +184,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         if (isInBlackList(msgId)) {
             removeFromBlacklist(msgId);
         } else {
-            // lock because ack and commit happen in different threads  //TODO
-            addToAcked(tp, msgId);
+            addAckedTuples(tp, msgId);
             // Removed acked tuples from the emittedTuples data structure
             emittedTuples.remove(msgId);
             // if this acked msg is a retry, remove it from failed data structure
@@ -193,14 +192,16 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private void addToAcked(TopicPartition tp, MessageId msgId) {   TODO Lock
+    private void addAckedTuples(TopicPartition tp, MessageId msgId) {
+        // lock because ack and commit happen in different threads
+        ackCommitLock.lock();
         try {
             if (!acked.containsKey(tp)) {
                 acked.put(tp, new OffsetEntry());
             }
             acked.get(tp).add(msgId);
         } finally {
-            ackedLock.unlock();
+            ackCommitLock.unlock();
         }
     }
 
@@ -283,7 +284,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         LOG.debug("Committing acked offsets to Kafka");
         // lock because ack and commit happen in different threads
-        ackedLock.lock();
+        ackCommitLock.lock();
         try {
             for (TopicPartition tp : acked.keySet()) {
                 final OffsetEntry offsetEntry = acked.get(tp);
@@ -292,30 +293,31 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                     toCommitOffsets.put(tp, offsetAndMetadata);
                 }
             }
-        } finally {
-            ackedLock.unlock();
-        }
 
-        kafkaConsumer.commitSync(toCommitOffsets);
-        LOG.debug("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
+            kafkaConsumer.commitSync(toCommitOffsets);
+            LOG.debug("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
 
-        // Instead of iterating again, we could commit each TopicPartition in the prior loop,
-        // but the multiple networks calls should be more expensive than iteration twice over a small loop
-        ackedLock.lock();
-        try {
+            // Instead of iterating again, we could commit each TopicPartition in the prior loop,
+            // but the multiple networks calls should be more expensive than iteration twice over a small loop
             for (TopicPartition tp : acked.keySet()) {
                 OffsetEntry offsetEntry = acked.get(tp);
                 offsetEntry.updateAckedState(toCommitOffsets.get(tp));
                 updateAckedState(tp, offsetEntry);
             }
         } finally {
-            ackedLock.unlock();
+            ackCommitLock.unlock();
         }
     }
 
     private void updateAckedState(TopicPartition tp, OffsetEntry offsetEntry) {
-        if (offsetEntry.isEmpty()) {
-            acked.remove(tp);           //LOCK
+        // lock because ack and commit happen in different threads
+        ackCommitLock.lock();
+        try {
+            if (offsetEntry.isEmpty()) {
+                acked.remove(tp);
+            }
+        } finally {
+            ackCommitLock.unlock();
         }
     }
 
@@ -327,6 +329,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
+    /** This class is not thread safe */
+    // Although this class is called by multiple (2) threads, all the calling methods are properly synchronized
     private class OffsetEntry {
         private long committedOffset = -1;          // last offset committed to Kafka
         private long toCommitOffset;                // last offset to be committed in the next commit operation
@@ -400,6 +404,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            LOG.debug("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
+                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
             commitAckedTuples();  // commit acked records,
             copyEmittedTuplesToBlackList(); // all the tuples that are in traffic when the rebalance occurs will be added to black list to avoid duplication
             clearFailed();   // remove all failed tuples form list to avoid duplication
