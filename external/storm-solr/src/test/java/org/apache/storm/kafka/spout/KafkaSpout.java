@@ -62,9 +62,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private KafkaConsumer<K, V> kafkaConsumer;
 
     // Bookkeeping
+    private KafkaSpoutStream kafkaSpoutStream;
+    private KafkaTupleBuilder<K,V> tupleBuilder;
     private transient ScheduledExecutorService commitOffsetsTask;
-    private transient KafkaSpoutStream kafkaSpoutStream;
-    private transient KafkaTupleBuilder<K,V> tupleBuilder;
     private transient Lock ackCommitLock;
 
 
@@ -74,7 +74,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private transient Set<MessageId> blackList;                       // all the tuples that are in traffic when the rebalance occurs will be added to black list to be disregarded when they are either acked or failed
     private transient int maxRetries;
 
-    public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig, KafkaSpoutStream kafkaSpoutStream, KafkaTupleBuilder tupleBuilder) {
+    public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig, KafkaSpoutStream kafkaSpoutStream, KafkaTupleBuilder<K,V> tupleBuilder) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStream = kafkaSpoutStream;
         this.tupleBuilder = tupleBuilder;

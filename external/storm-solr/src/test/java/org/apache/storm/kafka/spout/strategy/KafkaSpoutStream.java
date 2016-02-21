@@ -21,7 +21,9 @@ package org.apache.storm.kafka.spout.strategy;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.Utils;
 
-public class KafkaSpoutStream {
+import java.io.Serializable;
+
+public class KafkaSpoutStream implements Serializable {
     private final Fields outputFields;
     private final String streamId;
 

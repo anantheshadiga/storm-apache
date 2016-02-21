@@ -83,7 +83,7 @@ public class KafkaSpoutTopologyMain {
 
     public static StormTopology getTopolgyKafkaSpout() {
         TopologyBuilder tp = new TopologyBuilder();
-        tp.setSpout("hmcl_kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(), getKafkaOutputStream(), getTupleBuilder()), 10);
+        tp.setSpout("hmcl_kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(), getKafkaOutputStream(), getTupleBuilder()), 1);
         tp.setBolt("hmcl_kafka_bolt", new KafkaTestBolt()).shuffleGrouping("hmcl_kafka_spout");
         return tp.createTopology();
     }
