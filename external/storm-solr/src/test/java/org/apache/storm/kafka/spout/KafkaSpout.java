@@ -142,7 +142,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private ConsumerRecords<K, V> poll() {
         final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
-        LOG.debug("Polled {[]} records from Kafka", consumerRecords.count());
+        LOG.debug("Polled [{]} records from Kafka", consumerRecords.count());
         return consumerRecords;
     }
 
@@ -231,7 +231,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             final TopicPartition tp = msgId.getTopicPartition();
             // limit to max number of retries
             if (msgId.numFails() >= maxRetries) {
-                LOG.debug("Reached the maximum number of retries. Adding {[]} to list of messages to be committed to kafka", msgId);
+                LOG.debug("Reached the maximum number of retries. Adding [{]} to list of messages to be committed to kafka", msgId);
                 ack(msgId);
                 removeFromFailed(tp, msgId);
             } else {
@@ -310,7 +310,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
             if (!toCommitOffsets.isEmpty()) {
                 kafkaConsumer.commitSync(toCommitOffsets);
-                LOG.info("Offsets successfully committed to Kafka {[]}", toCommitOffsets);
+                LOG.info("Offsets successfully committed to Kafka [{]}", toCommitOffsets);
             }
 
             // Instead of iterating again, we could commit each TopicPartition in the prior loop,
@@ -384,14 +384,14 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
                     break;
                 } else {
-                    LOG.info("Unexpected offset found {[]}. {}", ackedMsg.offset(), toString());
+                    LOG.info("Unexpected offset found [{]}. {}", ackedMsg.offset(), toString());
                     break;
                 }
             }
 
             if (!toCommitMsgs.isEmpty()) {
                 offsetAndMetadata = new OffsetAndMetadata(toCommitOffset, toCommitMsg.getMetadata(Thread.currentThread()));
-                LOG.debug("Last offset to be committed in the next commit call: {[]}", offsetAndMetadata.offset());
+                LOG.debug("Last offset to be committed in the next commit call: [{]}", offsetAndMetadata.offset());
                 LOG.trace(toString());
             } else {
                 LOG.debug("No offsets found ready to commit");
