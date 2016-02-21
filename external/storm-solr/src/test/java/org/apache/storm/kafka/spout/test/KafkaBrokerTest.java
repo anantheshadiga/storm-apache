@@ -122,6 +122,12 @@ public class KafkaBrokerTest {
         }
     }
 
+    public static final String BOOTSTRAP_SERVERS = "bootstrap.servers";
+    public static final String AUTO_COMMIT_INTERVAL_MS = "auto.commit.interval.ms";
+    public static final String SESSION_TIMEOUT_MS = "session.timeout.ms";
+    public static final String KEY_DESERIALIZER = "key.deserializer";
+    public static final String VALUE_DESERIALIZER = "value.deserializer";
+
 
     private Properties getProperties() {
         Properties props = new Properties();
@@ -132,10 +138,10 @@ public class KafkaBrokerTest {
         props.put("enable.auto.commit", "true");
         props.put("auto.commit.interval.ms", "1000");
         props.put("session.timeout.ms", "30000");
-        props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-//        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-//        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+//        props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+//        props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         return props;
     }
 }

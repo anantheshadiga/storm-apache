@@ -19,9 +19,8 @@
 package org.apache.storm.kafka.spout.strategy;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.tuple.Values;
 
 public interface KafkaTupleBuilder<K,V> {
-    Values buildTuple(TopicPartition topicPartition, ConsumerRecord<K,V> consumerRecord);
+    Values buildTuple(ConsumerRecord<K, V> consumerRecord);
 }

@@ -137,7 +137,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         for (TopicPartition tp : consumerRecords.partitions()) {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit/poll either per topic or per partition
             for (ConsumerRecord<K, V> record : records) {
-                final Values tuple = tupleBuilder.buildTuple(tp, record);
+                final Values tuple = tupleBuilder.buildTuple(record);
                 final MessageId messageId = new MessageId(record);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
                 collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 emittedTuples.put(messageId, tuple);

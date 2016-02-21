@@ -20,6 +20,7 @@ package org.apache.storm.kafka.spout.strategy;
 
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -27,13 +28,21 @@ import java.util.Map;
 /**
  * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
  */
-public class KafkaSpoutConfig<K, V> {
+public class KafkaSpoutConfig<K, V> implements Serializable {
     public static final long DEFAULT_POLL_TIMEOUT_MS = 2_000;   // 2s
     public static final long DEFAULT_COMMIT_FREQ_MS = 15_000;   // 15s
     public static final int DEFAULT_MAX_RETRIES = Integer.MAX_VALUE;
 
-    public static String CONSUMER_AUTO_COMMIT_ENABLE = "auto.commit.enable";
-    public static String CONSUMER_GROUP_ID = "group.id";
+    // Kafka property names
+    public interface Consumer {
+        String ENABLE_AUTO_COMMIT = "enable.auto.commit";
+        String GROUP_ID = "group.id";
+        String BOOTSTRAP_SERVERS = "bootstrap.servers";
+        String AUTO_COMMIT_INTERVAL_MS = "auto.commit.interval.ms";
+        String SESSION_TIMEOUT_MS = "session.timeout.ms";
+        String KEY_DESERIALIZER = "key.deserializer";
+        String VALUE_DESERIALIZER = "value.deserializer";
+    }
 
     private final Map<String, Object> kafkaProps;
     private final Deserializer<K> keyDeserializer;
@@ -45,7 +54,7 @@ public class KafkaSpoutConfig<K, V> {
     private int maxRetries;
 
 
-    public KafkaSpoutConfig(Builder<K,V> builder) {
+    private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = builder.kafkaProps;
         this.keyDeserializer = builder.keyDeserializer;
         this.valueDeserializer = builder.valueDeserializer;
@@ -86,31 +95,35 @@ public class KafkaSpoutConfig<K, V> {
         /**
          * Specifying this key deserializer overrides the property key.deserializer
          */
-        public void setKeyDeserializer(Deserializer<K> keyDeserializer) {
+        public Builder<K,V> setKeyDeserializer(Deserializer<K> keyDeserializer) {
             this.keyDeserializer = keyDeserializer;
+            return this;
         }
 
         /**
          * Specifying this value deserializer overrides the property value.deserializer
          */
-        public void setValueDeserializer(Deserializer<V> valueDeserializer) {
+        public Builder<K,V> setValueDeserializer(Deserializer<V> valueDeserializer) {
             this.valueDeserializer = valueDeserializer;
+            return this;
         }
 
         /**
          * Specifies the time, in milliseconds, spent waiting in poll if data is not available. Default is 15s
          * @param pollTimeoutMs time in ms
          */
-        public void setPollTimeoutMs(long pollTimeoutMs) {
+        public Builder<K,V> setPollTimeoutMs(long pollTimeoutMs) {
             this.pollTimeoutMs = pollTimeoutMs;
+            return this;
         }
 
         /**
          * Specifies the frequency, in milliseconds, the offset commit task is called
          * @param commitFreqMs time in ms
          */
-        public void setCommitFreqMs(long commitFreqMs) {
+        public Builder<K,V> setCommitFreqMs(long commitFreqMs) {
             this.commitFreqMs = commitFreqMs;
+            return this;
         }
 
         /**
@@ -121,8 +134,9 @@ public class KafkaSpoutConfig<K, V> {
          * polled records in favor of processing more records.
          * @param maxRetries max number of retrials
          */
-        public void setMaxRetries(int maxRetries) {
+        public Builder<K,V> setMaxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
+            return this;
         }
 
         public KafkaSpoutConfig<K,V> build() {
@@ -151,12 +165,12 @@ public class KafkaSpoutConfig<K, V> {
     }
 
     public boolean isConsumerAutoCommitMode() {
-        return kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE) == null     // default is true
-                || ((String)kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE)).equalsIgnoreCase("true");
+        return kafkaProps.get(Consumer.ENABLE_AUTO_COMMIT) == null     // default is true
+                || ((String)kafkaProps.get(Consumer.ENABLE_AUTO_COMMIT)).equalsIgnoreCase("true");
     }
 
     public String getConsumerGroupId() {
-        return (String) kafkaProps.get(CONSUMER_GROUP_ID);
+        return (String) kafkaProps.get(Consumer.GROUP_ID);
     }
 
     public List<String> getSubscribedTopics() {

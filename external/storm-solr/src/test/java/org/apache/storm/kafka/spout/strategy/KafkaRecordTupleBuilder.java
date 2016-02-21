@@ -18,7 +18,18 @@
 
 package org.apache.storm.kafka.spout.strategy;
 
-public class KafkaConsumerWrapper {
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.storm.tuple.Values;
 
-
+public class KafkaRecordTupleBuilder<K,V> implements KafkaTupleBuilder<K, V> {
+    @Override
+    public Values buildTuple(final ConsumerRecord<K, V> consumerRecord) {
+        return new Values() {{
+            add(consumerRecord.topic());
+            add(consumerRecord.partition());
+            add(consumerRecord.offset());
+            add(consumerRecord.key());
+            add(consumerRecord.value());
+        }};
+    }
 }

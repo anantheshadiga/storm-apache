@@ -18,19 +18,32 @@
 
 package org.apache.storm.kafka.spout.test;
 
+import com.google.common.collect.Lists;
+
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.generated.StormTopology;
+import org.apache.storm.kafka.spout.KafkaSpout;
+import org.apache.storm.kafka.spout.strategy.KafkaRecordTupleBuilder;
+import org.apache.storm.kafka.spout.strategy.KafkaSpoutConfig;
+import org.apache.storm.kafka.spout.strategy.KafkaSpoutStream;
+import org.apache.storm.kafka.spout.strategy.KafkaTupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
+import org.apache.storm.tuple.Fields;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class KafkaSpoutTopologyMain {
+
     public static void main(String[] args) throws InterruptedException {
 //        stopOnInput();
-        submitTopologyLocalCluster(getTopolgy(), getConfig());
+//        submitTopologyLocalCluster(getTopolgy(), getConfig());
+        submitTopologyLocalCluster(getTopolgyKafkaSpout(), getConfig());
     }
 
     protected static void submitTopologyLocalCluster(StormTopology topology, Config config) throws InterruptedException {
@@ -66,6 +79,39 @@ public class KafkaSpoutTopologyMain {
         tp.setSpout("hmcl_kafka_spout", new KafkaTestSpout(), 10);
         tp.setBolt("hmcl_kafka_bolt", new KafkaTestBolt()).shuffleGrouping("hmcl_kafka_spout");
         return tp.createTopology();
+    }
+
+    public static StormTopology getTopolgyKafkaSpout() {
+        TopologyBuilder tp = new TopologyBuilder();
+        tp.setSpout("hmcl_kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(), getKafkaOutputStream(), getTupleBuilder()), 10);
+        tp.setBolt("hmcl_kafka_bolt", new KafkaTestBolt()).shuffleGrouping("hmcl_kafka_spout");
+        return tp.createTopology();
+    }
+
+    public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig() {
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), getTopics()).setCommitFreqMs(5_000).build();
+    }
+
+    public static Map<String,Object> getKafkaConsumerProps() {
+        Map<String, Object> props = new HashMap<>();
+        props.put(KafkaSpoutConfig.Consumer.BOOTSTRAP_SERVERS, "127.0.0.1:9092");
+        props.put(KafkaSpoutConfig.Consumer.GROUP_ID, "kafkaSpoutTestGroup");
+        props.put(KafkaSpoutConfig.Consumer.ENABLE_AUTO_COMMIT, "false");
+        props.put(KafkaSpoutConfig.Consumer.KEY_DESERIALIZER, "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put(KafkaSpoutConfig.Consumer.VALUE_DESERIALIZER, "org.apache.kafka.common.serialization.StringDeserializer");
+        return props;
+    }
+
+    public static List<String> getTopics() {
+        return Lists.newArrayList("test");
+    }
+
+    public static KafkaTupleBuilder<String,String> getTupleBuilder() {
+        return new KafkaRecordTupleBuilder<>();
+    }
+
+    public static KafkaSpoutStream getKafkaOutputStream() {
+        return new KafkaSpoutStream(new Fields("topic", "partition", "offset", "key", "value"));
     }
 
 }
