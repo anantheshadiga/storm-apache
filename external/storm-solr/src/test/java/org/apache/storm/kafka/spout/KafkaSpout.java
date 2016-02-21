@@ -52,9 +52,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaSpout.class);
     private static final Comparator<MessageId> OFFSET_COMPARATOR = new OffsetComparator();
 
-    private volatile Lock ackedLock;
-
-    //TODO Manage leaked connections
     // Storm
     private Map conf;
     private TopologyContext context;
@@ -65,21 +62,22 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private KafkaConsumer<K, V> kafkaConsumer;
 
     // Bookkeeping
-    private ScheduledExecutorService commitOffsetsTask;
-    private IOffsetsManager offsetsManager;
-    private KafkaSpoutStream kafkaSpoutStream;
-    private KafkaTupleBuilder<K,V> kafkaTupleBuilder;
+    private transient ScheduledExecutorService commitOffsetsTask;
+    private transient KafkaSpoutStream kafkaSpoutStream;
+    private transient KafkaTupleBuilder<K,V> tupleBuilder;
+    private transient Lock ackedLock;
 
 
     private transient Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked or failed
     private transient Map<TopicPartition, Set<MessageId>> failed;     // failed tuples. They stay in this list until success or max retries is reached
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed by the commitOffsetsTask or on consumer rebalance
     private transient Set<MessageId> blackList;                       // all the tuples that are in traffic when the rebalance occurs will be added to black list to be disregarded when they are either acked or failed
-    private int maxRetries;
+    private transient int maxRetries;
 
-    public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig, KafkaSpoutStream kafkaSpoutStream) {
+    public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig, KafkaSpoutStream kafkaSpoutStream, KafkaTupleBuilder tupleBuilder) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStream = kafkaSpoutStream;
+        this.tupleBuilder = tupleBuilder;
     }
 
     @Override
@@ -93,14 +91,14 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         emittedTuples = new HashMap<>();
         failed = new HashMap<>();
         acked = new HashMap<>();
-        ackedLock = new ReentrantLock();
+        ackedLock = new ReentrantLock();        //TODO
         blackList = new HashSet<>();
-        maxRetries = kafkaSpoutConfig.getMaxRetries();
+        maxRetries = kafkaSpoutConfig.getMaxTupleRetries();
 
         // Kafka consumer
         kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
                 kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
-        kafkaConsumer.subscribe(kafkaSpoutConfig.getTopics(), new KafkaSpoutConsumerRebalanceListener());
+        kafkaConsumer.subscribe(kafkaSpoutConfig.getSubscribedTopics(), new KafkaSpoutConsumerRebalanceListener());
 
         // Create commit offsets task
         if (!kafkaSpoutConfig.isConsumerAutoCommitMode()) {     // If it is auto commit, no need to commit offsets manually
@@ -115,13 +113,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             public void run() {
                 commitAckedTuples();
             }
-        }, kafkaSpoutConfig.getOffsetCommitFreqMs(), TimeUnit.MILLISECONDS);
+        }, kafkaSpoutConfig.getOffsetsCommitFreqMs(), TimeUnit.MILLISECONDS);
     }
 
-
     // ======== Next Tuple =======
-    //TODO HANDLE PARALLELISM
-//    String topologyMaxSpoutPending = Config.TOPOLOGY_MAX_SPOUT_PENDING;
+
     @Override
     public void nextTuple() {
         if (retry()) {              // Don't process new tuples until the failed tuples have all been acked
@@ -139,10 +135,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private void emitTuples(ConsumerRecords<K, V> consumerRecords) {
         for (TopicPartition tp : consumerRecords.partitions()) {
-            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if emmit per topic or per partition
+            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit per topic or per partition
             for (ConsumerRecord<K, V> record : records) {
-                final Values tuple = kafkaTupleBuilder.buildTuple(tp, record);
-                final MessageId messageId = new MessageId(record);                   // TODO don't create message for non acking mode?
+                final Values tuple = tupleBuilder.buildTuple(tp, record);
+                final MessageId messageId = new MessageId(record);                                  // TODO don't create message for non acking mode?
                 collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 emittedTuples.put(messageId, tuple);
             }
@@ -156,11 +152,26 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private void retryFailedTuples() {
         for (TopicPartition tp : failed.keySet()) {
             for (MessageId msgId : failed.get(tp)) {
-                final Values tuple = emittedTuples.get(msgId);
-                LOG.debug("Retrying tuple. [msgId={}, tuple={}]", msgId, tuple);
-                collector.emit(kafkaSpoutStream.getStreamId(), tuple, msgId);
+                if (isInBlackList(msgId)) {
+                    removeFromBlacklist(msgId);
+                    removeFromFailed(tp, msgId);
+                } else {
+                    final Values tuple = emittedTuples.get(msgId);
+                    LOG.debug("Retrying tuple. [msgId={}, tuple={}]", msgId, tuple);
+                    collector.emit(kafkaSpoutStream.getStreamId(), tuple, msgId);
+                }
             }
         }
+    }
+
+    // all the tuples that are in traffic when the rebalance occurs will be added
+    // to black list to be disregarded when they are either acked or failed
+    private boolean isInBlackList(MessageId msgId) {
+        return blackList.contains(msgId);
+    }
+
+    private void removeFromBlacklist(MessageId msgId) {
+        blackList.remove(msgId);
     }
 
     // ======== Ack =======
@@ -170,27 +181,26 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         final MessageId msgId = (MessageId) messageId;
         final TopicPartition tp = msgId.getTopicPartition();
 
-        // lock because ack and commit happen in different threads
-        ackedLock.lock();
+        if (isInBlackList(msgId)) {
+            removeFromBlacklist(msgId);
+        } else {
+            // lock because ack and commit happen in different threads  //TODO
+            addToAcked(tp, msgId);
+            // Removed acked tuples from the emittedTuples data structure
+            emittedTuples.remove(msgId);
+            // if this acked msg is a retry, remove it from failed data structure
+            removeFromFailed(tp, msgId);
+        }
+    }
+
+    private void addToAcked(TopicPartition tp, MessageId msgId) {   TODO Lock
         try {
             if (!acked.containsKey(tp)) {
                 acked.put(tp, new OffsetEntry());
             }
-            acked.get(tp).add(msgId);;
+            acked.get(tp).add(msgId);
         } finally {
             ackedLock.unlock();
-        }
-
-        // Removed acked tuples from the emittedTuples data structure
-        emittedTuples.remove(msgId);
-
-        // if this acked msg is a retry, remove it from failed data structure
-        if (failed.containsKey(tp)) {
-            final Set<MessageId> msgIds = failed.get(tp);
-            msgIds.remove(msgId);
-            if (msgIds.isEmpty()) {
-                failed.remove(tp);
-            }
         }
     }
 
@@ -199,33 +209,50 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     @Override
     public void fail(Object messageId) {
         final MessageId msgId = (MessageId) messageId;
-        final TopicPartition tp = msgId.getTopicPartition();
-        if (!failed.containsKey(tp)) {
-            failed.put(tp, new HashSet<MessageId>());
-        }
 
-        final Set<MessageId> msgIds = failed.get(tp);
-        if (msgIds.contains(msgId)) {
-            msgIds.remove(msgId);
+        if (isInBlackList(msgId)) {
+            removeFromBlacklist(msgId);
         } else {
-            msgId.incrementNumFails();        // increment number of failures counter
-            msgIds.add(msgId);
-        }
-
-        // limit to max number of retries
-        if (msgId.numFails() >= maxRetries) {
-            LOG.debug("Reached the maximum number of retries. Adding {[]} to list of messages to be committed to kafka", msgId);
-            ack(msgId);
-            msgIds.remove(msgId);
-            if (msgIds.isEmpty()) {
-                failed.remove(tp);
+            final TopicPartition tp = msgId.getTopicPartition();
+            // limit to max number of retries
+            if (msgId.numFails() >= maxRetries) {
+                LOG.debug("Reached the maximum number of retries. Adding {[]} to list of messages to be committed to kafka", msgId);
+                ack(msgId);
+                removeFromFailed(tp, msgId);
+            } else {
+                addToFailed(tp, msgId);
             }
         }
     }
 
+    private void addToFailed(TopicPartition tp, MessageId msgId) {
+        if (!failed.containsKey(tp)) {
+            failed.put(tp, new HashSet<MessageId>());
+        }
+        final Set<MessageId> msgIds = failed.get(tp);
+        if (msgIds.contains(msgId)) {      // do this to update the counter of the message
+            msgIds.remove(msgId);
+        }
+        msgId.incrementNumFails();        // increment number of failures counter
+        msgIds.add(msgId);
+    }
+
+    private void removeFromFailed(TopicPartition tp, MessageId msgId) {
+        if (failed.containsKey(tp)) {
+            final Set<MessageId> msgIds = failed.get(tp);
+            msgIds.remove(msgId);
+            if (msgIds.isEmpty()) {
+                failed.remove(tp);
+            }
+            LOG.debug("Removing from failed list [{}, {}]", tp, msgId);
+        }
+    }
+
+    // ======== Activate / Deactivate =======
+
     @Override
     public void activate() {
-        //resume processing
+        // Shouldn't have to do anything for now. If specific cases need to be handled logic will go here
     }
 
     @Override
@@ -259,7 +286,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         ackedLock.lock();
         try {
             for (TopicPartition tp : acked.keySet()) {
-                OffsetEntry offsetEntry = acked.get(tp);
+                final OffsetEntry offsetEntry = acked.get(tp);
                 OffsetAndMetadata offsetAndMetadata = offsetEntry.findOffsetToCommit();
                 if (offsetAndMetadata != null) {
                     toCommitOffsets.put(tp, offsetAndMetadata);
@@ -375,7 +402,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             commitAckedTuples();  // commit acked records,
             copyEmittedTuplesToBlackList(); // all the tuples that are in traffic when the rebalance occurs will be added to black list to avoid duplication
-            clearFailedTuples();   // remove all failed tuples form list to avoid duplication
+            clearFailed();   // remove all failed tuples form list to avoid duplication
             clearEmittedTuples();    // clear emitted tuples
         }
 
@@ -383,12 +410,12 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             blackList.addAll(emittedTuples.keySet());
         }
 
-        private void clearFailedTuples() {
+        private void clearFailed() {
             failed = new HashMap<>();
         }
 
         private void clearEmittedTuples() {
-            failed = new HashMap<>();
+            emittedTuples = new HashMap<>();
         }
 
         @Override

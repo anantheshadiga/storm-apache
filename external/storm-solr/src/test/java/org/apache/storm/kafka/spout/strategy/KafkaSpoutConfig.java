@@ -30,7 +30,7 @@ import java.util.Map;
 public class KafkaSpoutConfig<K, V> {
     public static final long DEFAULT_POLL_TIMEOUT_MS = 2_000;   // 2s
     public static final long DEFAULT_COMMIT_FREQ_MS = 15_000;   // 15s
-    public static final int DEFAULT_MAX_RETRIES = Integer.MAX_VALUE;   // 15s
+    public static final int DEFAULT_MAX_RETRIES = Integer.MAX_VALUE;
 
     public static String CONSUMER_AUTO_COMMIT_ENABLE = "auto.commit.enable";
     public static String CONSUMER_GROUP_ID = "group.id";
@@ -146,12 +146,12 @@ public class KafkaSpoutConfig<K, V> {
         return pollTimeoutMs;
     }
 
-    public long getOffsetCommitFreqMs() {
+    public long getOffsetsCommitFreqMs() {
         return commitFreqMs;
     }
 
     public boolean isConsumerAutoCommitMode() {
-        return kafkaProps == null || kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE) == null     // default is true
+        return kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE) == null     // default is true
                 || ((String)kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE)).equalsIgnoreCase("true");
     }
 
@@ -159,11 +159,11 @@ public class KafkaSpoutConfig<K, V> {
         return (String) kafkaProps.get(CONSUMER_GROUP_ID);
     }
 
-    public List<String> getTopics() {
+    public List<String> getSubscribedTopics() {
         return Collections.unmodifiableList(topics);
     }
 
-    public int getMaxRetries() {
+    public int getMaxTupleRetries() {
         return maxRetries;
     }
 }
