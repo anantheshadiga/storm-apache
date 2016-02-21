@@ -379,9 +379,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
          * This method has side effects and should be called after findOffsetToCommit
          */
         public void updateAckedState(OffsetAndMetadata offsetAndMetadata) {
-            committedOffset = offsetAndMetadata.offset();
-            toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
-            ackedMsgs.removeAll(toCommitMsgs);
+            if (offsetAndMetadata != null) {
+                committedOffset = offsetAndMetadata.offset();
+                toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
+                ackedMsgs.removeAll(toCommitMsgs);
+            }
         }
 
         public boolean isEmpty() {
