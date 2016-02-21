@@ -310,7 +310,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
             if (!toCommitOffsets.isEmpty()) {
                 kafkaConsumer.commitSync(toCommitOffsets);
-                LOG.info("Offsets successfully committed to Kafka [{]}", toCommitOffsets);
+                LOG.debug("Offsets successfully committed to Kafka [{]}", toCommitOffsets);
             }
 
             // Instead of iterating again, we could commit each TopicPartition in the prior loop,
@@ -384,7 +384,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
                     break;
                 } else {
-                    LOG.info("Unexpected offset found [{]}. {}", ackedMsg.offset(), toString());
+                    LOG.debug("Unexpected offset found [{]}. {}", ackedMsg.offset(), toString());
                     break;
                 }
             }
