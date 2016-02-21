@@ -67,8 +67,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private KafkaTupleBuilder<K,V> tupleBuilder;
     private transient ScheduledExecutorService commitOffsetsTask;
     private transient Lock ackCommitLock;
-
-
+    private transient volatile boolean commit;
     private transient Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked or failed
     private transient Map<TopicPartition, Set<MessageId>> failed;     // failed tuples. They stay in this list until success or max retries is reached
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed by the commitOffsetsTask or on consumer rebalance
@@ -111,12 +110,12 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private void createCommitOffsetsTask() {
         commitOffsetsTask = Executors.newSingleThreadScheduledExecutor(commitOffsetsThreadFactory());
-        commitOffsetsTask.schedule(new Runnable() {
+        commitOffsetsTask.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                commitAckedTuples();
+                commit = true;
             }
-        }, kafkaSpoutConfig.getOffsetsCommitFreqMs(), TimeUnit.MILLISECONDS);
+        }, 1000, kafkaSpoutConfig.getOffsetsCommitFreqMs(), TimeUnit.MILLISECONDS);
     }
 
     private ThreadFactory commitOffsetsThreadFactory() {
@@ -132,7 +131,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void nextTuple() {
-        if (retry()) {              // Don't process new tuples until the failed tuples have all been acked
+        if(commit) {
+            commitAckedTuples();
+        } else if (retry()) {              // Don't process new tuples until the failed tuples have all been acked
             retryFailedTuples();
         } else {
             emitTuples(poll());
@@ -153,6 +154,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 final MessageId messageId = new MessageId(record);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
                 collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 emittedTuples.put(messageId, tuple);
+                LOG.info("HMCL - Emitted tuple for record {}", record);
             }
         }
     }
@@ -316,7 +318,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 offsetEntry.updateAckedState(toCommitOffsets.get(tp));
                 updateAckedState(tp, offsetEntry);
             }
+        } catch (Exception e) {
+            LOG.error("Exception occurred while committing to Kafka offsets for acked tuples ", e);
         } finally {
+            commit = false;
             ackCommitLock.unlock();
         }
     }

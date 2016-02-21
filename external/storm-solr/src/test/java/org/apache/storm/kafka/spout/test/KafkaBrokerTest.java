@@ -21,15 +21,24 @@ package org.apache.storm.kafka.spout.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
 import java.util.TreeSet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Unit test for simple KafkaBrokerTest.
@@ -54,32 +63,6 @@ public class KafkaBrokerTest {
     }
 
     @Test
-    public void main() {
-        Properties props = getProperties();
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
-//        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(Arrays.asList("test"));
-        int i = 0;
-        while (true) {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(10000);
-//            ConsumerRecords<String, String> records = consumer.poll(10000);
-            System.err.println("i = " + i);
-            consumer.seek(new TopicPartition("test", 0), i++);
-            if (i == 1) {
-                records = consumer.poll(10000);
-                consumer.commitAsync();
-            }
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-//            for (ConsumerRecord<String, String> record : records) {
-//                System.err.println("Inside Loop");
-                System.err.printf("offset = %d, key = %s, value = %s\n", record.offset(), record.key(), record.value());
-            }
-            System.err.println();
-        }
-//        System.err.println("Exit");
-    }
-
-    @Test
     public void testTreeSetConcurrent() throws Exception{
         TreeSet<Integer> tsi = new TreeSet<>();
         for (int i = 0; i < 10000; i++) {
@@ -93,8 +76,8 @@ public class KafkaBrokerTest {
     }
 
     private class TreeSetPrint implements Runnable {
-        TreeSet<Integer> tsi;
 
+        TreeSet<Integer> tsi;
         public TreeSetPrint(TreeSet<Integer> tsi) {
             this.tsi = tsi;
         }
@@ -105,11 +88,11 @@ public class KafkaBrokerTest {
                 System.out.println("integer = " + i);
             }
         }
+
     }
-
     private class TreeSetAdd implements Runnable {
-        TreeSet<Integer> tsi;
 
+        TreeSet<Integer> tsi;
         public TreeSetAdd(TreeSet<Integer> tsi) {
             this.tsi = tsi;
         }
@@ -120,6 +103,44 @@ public class KafkaBrokerTest {
             System.out.println("Adding i = " + i);
             tsi.add(i);
         }
+
+    }
+
+    @Test
+    public void testTimerThread() throws Exception {
+        createCommitOffsetsTask();
+        stopOnInput();
+    }
+
+    private static void stopOnInput() {
+        try {
+            System.out.println("PRESSE ENTER TO STOP");
+            new BufferedReader(new InputStreamReader(System.in)).readLine();
+            System.exit(0);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private ScheduledExecutorService commitOffsetsTask;
+
+    private void createCommitOffsetsTask() {
+        commitOffsetsTask = Executors.newSingleThreadScheduledExecutor(commitOffsetsThreadFactory());
+        commitOffsetsTask.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Timer Triggered");
+            }
+        }, 100, 2000, TimeUnit.MILLISECONDS);
+    }
+
+    private ThreadFactory commitOffsetsThreadFactory() {
+        return new ThreadFactory() {
+            @Override
+            public Thread newThread(Runnable r) {
+                return new Thread(r, "kafka-spout-commit-offsets-thread");
+            }
+        };
     }
 
     public static final String BOOTSTRAP_SERVERS = "bootstrap.servers";
@@ -128,6 +149,34 @@ public class KafkaBrokerTest {
     public static final String KEY_DESERIALIZER = "key.deserializer";
     public static final String VALUE_DESERIALIZER = "value.deserializer";
 
+    @Test
+    public void main() {
+        Properties props = getProperties();
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
+//        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+        consumer.subscribe(Arrays.asList("test"));
+        int i = 0;
+        while (true) {
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(10000);
+//            ConsumerRecords<String, String> records = consumer.poll(10000);
+            /*System.err.println("i = " + i);
+            consumer.seek(new TopicPartition("test", 0), i++);
+            if (i == 1) {
+                records = consumer.poll(10000);
+                consumer.commitAsync();
+            }*/
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+//            for (ConsumerRecord<String, String> record : records) {
+//                System.err.println("Inside Loop");
+                System.err.printf("offset = %d, key = %s, value = %s\n", record.offset(), record.key(), record.value());
+            }
+            consumer.commitSync(new HashMap<TopicPartition, OffsetAndMetadata>(){
+                {put(new TopicPartition("test", 0), new OffsetAndMetadata(16, "hmcl_meta"));}
+            });
+//            System.err.println();
+        }
+//        System.err.println("Exit");
+    }
 
     private Properties getProperties() {
         Properties props = new Properties();
@@ -135,7 +184,7 @@ public class KafkaBrokerTest {
 //        props.put("bootstrap.servers", "localhost:9923");
         props.put("group.id", "test-group-1");
 //        props.put("group.id", "test-consumer-group");
-        props.put("enable.auto.commit", "true");
+        props.put("enable.auto.commit", "false");
         props.put("auto.commit.interval.ms", "1000");
         props.put("session.timeout.ms", "30000");
 //        props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
