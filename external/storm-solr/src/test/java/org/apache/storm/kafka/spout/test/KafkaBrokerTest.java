@@ -155,12 +155,14 @@ public class KafkaBrokerTest {
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
 //        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
         consumer.subscribe(Arrays.asList("test"));
+        consumer.seekToBeginning(new TopicPartition("test", 0));
         int i = 0;
         while (true) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(10000);
+//            consumer.seek(new TopicPartition("test", 0), 10);
 //            ConsumerRecords<String, String> records = consumer.poll(10000);
             /*System.err.println("i = " + i);
-            consumer.seek(new TopicPartition("test", 0), i++);
+//            consumer.seek(new TopicPartition("test", 0), i++);
             if (i == 1) {
                 records = consumer.poll(10000);
                 consumer.commitAsync();

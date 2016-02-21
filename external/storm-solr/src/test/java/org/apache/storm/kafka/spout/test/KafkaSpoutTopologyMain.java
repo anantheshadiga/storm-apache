@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
+import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.strategy.KafkaRecordTupleBuilder;
@@ -40,10 +41,15 @@ import java.util.Map;
 
 public class KafkaSpoutTopologyMain {
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws Exception {
 //        stopOnInput();
 //        submitTopologyLocalCluster(getTopolgy(), getConfig());
-        submitTopologyLocalCluster(getTopolgyKafkaSpout(), getConfig());
+
+        if (args.length == 0) {
+            submitTopologyLocalCluster(getTopolgyKafkaSpout(), getConfig());
+        } else {
+            submitTopologyRemoteCluster(args[1], getTopolgyKafkaSpout(), getConfig());
+        }
     }
 
     protected static void submitTopologyLocalCluster(StormTopology topology, Config config) throws InterruptedException {
@@ -55,6 +61,10 @@ public class KafkaSpoutTopologyMain {
 //        cluster.shutdown();
 //        System.exit(0);
         stopOnInput();
+    }
+
+    protected static void submitTopologyRemoteCluster(String arg, StormTopology topology, Config config) throws Exception {
+        StormSubmitter.submitTopology(arg, config, topology);
     }
 
     private static void stopOnInput() {
