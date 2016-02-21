@@ -28,8 +28,11 @@ import java.util.Map;
  * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
  */
 public class KafkaSpoutConfig<K, V> {
-    public static final long DEFAULT_POLL_TIMEOUT_MS = 2000;
-    public static String AUTO_COMMIT_ENABLE= "auto.commit.enable";
+    public static final long DEFAULT_POLL_TIMEOUT_MS = 2_000;   // 2s
+    public static final long DEFAULT_COMMIT_FREQ_MS = 15_000;   // 15s
+    public static final int DEFAULT_MAX_RETRIES = Integer.MAX_VALUE;   // 15s
+
+    public static String CONSUMER_AUTO_COMMIT_ENABLE = "auto.commit.enable";
     public static String CONSUMER_GROUP_ID = "group.id";
 
     private final Map<String, Object> kafkaProps;
@@ -57,9 +60,9 @@ public class KafkaSpoutConfig<K, V> {
         private Deserializer<K> keyDeserializer;
         private Deserializer<V> valueDeserializer;
         private long pollTimeoutMs = DEFAULT_POLL_TIMEOUT_MS;
-        private long commitFreqMs = 15_000;                 // Default is 15s
+        private long commitFreqMs = DEFAULT_COMMIT_FREQ_MS;
+        private int maxRetries = DEFAULT_MAX_RETRIES;
         private List<String> topics;
-        private int maxRetries;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -95,7 +98,7 @@ public class KafkaSpoutConfig<K, V> {
         }
 
         /**
-         * Specifies the time, in milliseconds, spent waiting in poll if data is not available.
+         * Specifies the time, in milliseconds, spent waiting in poll if data is not available. Default is 15s
          * @param pollTimeoutMs time in ms
          */
         public void setPollTimeoutMs(long pollTimeoutMs) {
@@ -143,13 +146,13 @@ public class KafkaSpoutConfig<K, V> {
         return pollTimeoutMs;
     }
 
-    public long getCommitFreqMs() {
+    public long getOffsetCommitFreqMs() {
         return commitFreqMs;
     }
 
-    public boolean isAutoCommitMode() {
-        return kafkaProps == null || kafkaProps.get(AUTO_COMMIT_ENABLE) == null     // default is true
-                || ((String)kafkaProps.get(AUTO_COMMIT_ENABLE)).equalsIgnoreCase("true");
+    public boolean isConsumerAutoCommitMode() {
+        return kafkaProps == null || kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE) == null     // default is true
+                || ((String)kafkaProps.get(CONSUMER_AUTO_COMMIT_ENABLE)).equalsIgnoreCase("true");
     }
 
     public String getConsumerGroupId() {
