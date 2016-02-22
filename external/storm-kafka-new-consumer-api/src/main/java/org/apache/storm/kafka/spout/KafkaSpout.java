@@ -48,7 +48,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class KafkaSpout<K,V> extends BaseRichSpout {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaSpout.class);
-    private static final Comparator<org.apache.storm.kafka.spout.MessageId> OFFSET_COMPARATOR = new OffsetComparator();
+    private static final Comparator<MessageId> OFFSET_COMPARATOR = new OffsetComparator();
 
     // Storm
     private Map conf;
@@ -56,22 +56,22 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     protected SpoutOutputCollector collector;
 
     // Kafka
-    private final org.apache.storm.kafka.spout.KafkaSpoutConfig<K, V> kafkaSpoutConfig;
+    private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
     private KafkaConsumer<K, V> kafkaConsumer;
 
     // Bookkeeping
-    private org.apache.storm.kafka.spout.KafkaSpoutStream kafkaSpoutStream;
-    private org.apache.storm.kafka.spout.KafkaTupleBuilder<K,V> tupleBuilder;
+    private KafkaSpoutStream kafkaSpoutStream;
+    private KafkaTupleBuilder<K,V> tupleBuilder;
     private transient ScheduledExecutorService commitOffsetsTask;
     private transient Lock ackCommitLock;
     private transient volatile boolean commit;
-    private transient Map<org.apache.storm.kafka.spout.MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked or failed
-    private transient Map<TopicPartition, Set<org.apache.storm.kafka.spout.MessageId>> failed;     // failed tuples. They stay in this list until success or max retries is reached
+    private transient Map<MessageId, Values> emittedTuples;           // Keeps a list of emitted tuples that are pending being acked or failed
+    private transient Map<TopicPartition, Set<MessageId>> failed;     // failed tuples. They stay in this list until success or max retries is reached
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed by the commitOffsetsTask or on consumer rebalance
-    private transient Set<org.apache.storm.kafka.spout.MessageId> blackList;                       // all the tuples that are in traffic when the rebalance occurs will be added to black list to be disregarded when they are either acked or failed
+    private transient Set<MessageId> blackList;                       // all the tuples that are in traffic when the rebalance occurs will be added to black list to be disregarded when they are either acked or failed
     private transient int maxRetries;
 
-    public KafkaSpout(org.apache.storm.kafka.spout.KafkaSpoutConfig<K,V> kafkaSpoutConfig, org.apache.storm.kafka.spout.KafkaSpoutStream kafkaSpoutStream, org.apache.storm.kafka.spout.KafkaTupleBuilder<K,V> tupleBuilder) {
+    public KafkaSpout(KafkaSpoutConfig<K,V> kafkaSpoutConfig, KafkaSpoutStream kafkaSpoutStream, KafkaTupleBuilder<K,V> tupleBuilder) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStream = kafkaSpoutStream;
         this.tupleBuilder = tupleBuilder;
@@ -139,7 +139,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private ConsumerRecords<K, V> poll() {
         final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
-        LOG.debug("Polled [{]} records from Kafka", consumerRecords.count());
+        LOG.debug("Polled [{}] records from Kafka", consumerRecords.count());
         return consumerRecords;
     }
 
@@ -148,10 +148,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit/poll either per topic or per partition
             for (ConsumerRecord<K, V> record : records) {
                 final Values tuple = tupleBuilder.buildTuple(record);
-                final org.apache.storm.kafka.spout.MessageId messageId = new org.apache.storm.kafka.spout.MessageId(record);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
+                final MessageId messageId = new MessageId(record);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
                 collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 emittedTuples.put(messageId, tuple);
-                LOG.info("HMCL - Emitted tuple for record {}", record);
+                LOG.debug("Emitted tuple for record {}", record);
             }
         }
     }
@@ -162,7 +162,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     private void retryFailedTuples() {
         for (TopicPartition tp : failed.keySet()) {
-            for (org.apache.storm.kafka.spout.MessageId msgId : failed.get(tp)) {
+            for (MessageId msgId : failed.get(tp)) {
                 if (isInBlackList(msgId)) {
                     removeFromBlacklist(msgId);
                     removeFromFailed(tp, msgId);
@@ -177,11 +177,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     // all the tuples that are in traffic when the rebalance occurs will be added
     // to black list to be disregarded when they are either acked or failed
-    private boolean isInBlackList(org.apache.storm.kafka.spout.MessageId msgId) {
+    private boolean isInBlackList(MessageId msgId) {
         return blackList.contains(msgId);
     }
 
-    private void removeFromBlacklist(org.apache.storm.kafka.spout.MessageId msgId) {
+    private void removeFromBlacklist(MessageId msgId) {
         blackList.remove(msgId);
     }
 
@@ -189,7 +189,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void ack(Object messageId) {
-        final org.apache.storm.kafka.spout.MessageId msgId = (org.apache.storm.kafka.spout.MessageId) messageId;
+        final MessageId msgId = (MessageId) messageId;
         final TopicPartition tp = msgId.getTopicPartition();
 
         if (isInBlackList(msgId)) {
@@ -203,7 +203,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private void addAckedTuples(TopicPartition tp, org.apache.storm.kafka.spout.MessageId msgId) {
+    private void addAckedTuples(TopicPartition tp, MessageId msgId) {
         // lock because ack and commit happen in different threads
         ackCommitLock.lock();
         try {
@@ -220,7 +220,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void fail(Object messageId) {
-        final org.apache.storm.kafka.spout.MessageId msgId = (org.apache.storm.kafka.spout.MessageId) messageId;
+        final MessageId msgId = (MessageId) messageId;
 
         if (isInBlackList(msgId)) {
             removeFromBlacklist(msgId);
@@ -237,21 +237,21 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private void addToFailed(TopicPartition tp, org.apache.storm.kafka.spout.MessageId msgId) {
+    private void addToFailed(TopicPartition tp, MessageId msgId) {
         if (!failed.containsKey(tp)) {
-            failed.put(tp, new HashSet<org.apache.storm.kafka.spout.MessageId>());
+            failed.put(tp, new HashSet<MessageId>());
         }
-        final Set<org.apache.storm.kafka.spout.MessageId> msgIds = failed.get(tp);
+        final Set<MessageId> msgIds = failed.get(tp);
         if (msgIds.contains(msgId)) {      // do this to update the counter of the message
             msgIds.remove(msgId);
         }
-        msgId.incrementNumFails();        // increment number of failures counter
+        msgId.incrementNumFails();         // increment number of failures counter
         msgIds.add(msgId);
     }
 
-    private void removeFromFailed(TopicPartition tp, org.apache.storm.kafka.spout.MessageId msgId) {
+    private void removeFromFailed(TopicPartition tp, MessageId msgId) {
         if (failed.containsKey(tp)) {
-            final Set<org.apache.storm.kafka.spout.MessageId> msgIds = failed.get(tp);
+            final Set<MessageId> msgIds = failed.get(tp);
             msgIds.remove(msgId);
             if (msgIds.isEmpty()) {
                 failed.remove(tp);
@@ -339,8 +339,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     // ======= Offsets Commit Management ==========
 
-    private static class OffsetComparator implements Comparator<org.apache.storm.kafka.spout.MessageId> {
-        public int compare(org.apache.storm.kafka.spout.MessageId m1, org.apache.storm.kafka.spout.MessageId m2) {
+    private static class OffsetComparator implements Comparator<MessageId> {
+        public int compare(MessageId m1, MessageId m2) {
             return m1.offset() < m2.offset() ? -1 : m1.offset() == m2.offset() ? 0 : 1;
         }
     }
@@ -350,8 +350,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private class OffsetEntry {
         private long committedOffset;          // last offset committed to Kafka
         private long toCommitOffset;                // last offset to be committed in the next commit operation
-        private final Set<org.apache.storm.kafka.spout.MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // sort messages by ascending order of offset
-        private Set<org.apache.storm.kafka.spout.MessageId> toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        // Messages that contain the offsets to be committed in the next commit operation
+        private final Set<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // sort messages by ascending order of offset
+        private Set<MessageId> toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        // Messages that contain the offsets to be committed in the next commit operation
 
         public OffsetEntry(TopicPartition tp) {
             OffsetAndMetadata committed = kafkaConsumer.committed(tp);
@@ -359,7 +359,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             LOG.debug("Created OffsetEntry for [topic-partition={}, last-committed-offset={}]", tp, committedOffset);
         }
 
-        public void add(org.apache.storm.kafka.spout.MessageId msgId) {          // O(Log N)
+        public void add(MessageId msgId) {          // O(Log N)
             ackedMsgs.add(msgId);
         }
 
@@ -371,9 +371,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             OffsetAndMetadata offsetAndMetadata = null;
             toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
             toCommitOffset = committedOffset;
-            org.apache.storm.kafka.spout.MessageId toCommitMsg = null;
+            MessageId toCommitMsg = null;
 
-            for (org.apache.storm.kafka.spout.MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
+            for (MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
                 if ((currOffset = ackedMsg.offset()) == toCommitOffset || currOffset == toCommitOffset + 1) {    // found the next offset to commit
                     toCommitMsgs.add(ackedMsg);
                     toCommitMsg = ackedMsg;

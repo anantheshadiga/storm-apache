@@ -41,7 +41,7 @@ public class KafkaTestBolt extends BaseRichBolt {
 
     @Override
     public void execute(Tuple input) {
-        LOG.info("input = [" + input + "]");
+        LOG.debug("input = [" + input + "]");
         collector.ack(input);
     }
 
