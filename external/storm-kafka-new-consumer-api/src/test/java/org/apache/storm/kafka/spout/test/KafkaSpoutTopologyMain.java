@@ -82,7 +82,7 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig() {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), getTopics()).setCommitFreqMs(5_000).build();
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), getTopics()).setCommitFreqMs(10_000).build();
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {

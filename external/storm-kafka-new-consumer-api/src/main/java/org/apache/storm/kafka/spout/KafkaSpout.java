@@ -293,7 +293,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private void commitAckedTuples() {
         final Map<TopicPartition, OffsetAndMetadata> toCommitOffsets = new HashMap<>();
 
-        LOG.debug("Committing acked offsets to Kafka");
         // lock because ack and commit happen in different threads
         ackCommitLock.lock();
         try {
@@ -308,17 +307,19 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             if (!toCommitOffsets.isEmpty()) {
                 kafkaConsumer.commitSync(toCommitOffsets);
                 LOG.debug("Offsets successfully committed to Kafka [{]}", toCommitOffsets);
+                // Instead of iterating again, we could commit each TopicPartition in the prior loop,
+                // but the multiple networks calls should be more expensive than iterating twice over a small loop
+                for (TopicPartition tp : acked.keySet()) {
+                    OffsetEntry offsetEntry = acked.get(tp);
+                    offsetEntry.updateAckedState(toCommitOffsets.get(tp));
+                    updateAckedState(tp, offsetEntry);
+                }
+            } else {
+                LOG.trace("No offsets to commit. {}", toString());
             }
 
-            // Instead of iterating again, we could commit each TopicPartition in the prior loop,
-            // but the multiple networks calls should be more expensive than iteration twice over a small loop
-            for (TopicPartition tp : acked.keySet()) {
-                OffsetEntry offsetEntry = acked.get(tp);
-                offsetEntry.updateAckedState(toCommitOffsets.get(tp));
-                updateAckedState(tp, offsetEntry);
-            }
         } catch (Exception e) {
-            LOG.error("Exception occurred while committing to Kafka offsets for acked tuples ", e);
+            LOG.error("Exception occurred while committing acked tuples offsets to Kafka", e);
         } finally {
             commit = false;
             ackCommitLock.unlock();
@@ -337,6 +338,17 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
+    @Override
+    public String toString() {
+        return "KafkaSpout{" +
+                "emittedTuples=" + emittedTuples +
+                ", failed=" + failed +
+                ", acked=" + acked +
+                ", blackList=" + blackList +
+                ", commit=" + commit +
+                "} ";
+    }
+
     // ======= Offsets Commit Management ==========
 
     private static class OffsetComparator implements Comparator<MessageId> {
@@ -348,12 +360,14 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     /** This class is not thread safe */
     // Although this class is called by multiple (2) threads, all the calling methods are properly synchronized
     private class OffsetEntry {
-        private long committedOffset;          // last offset committed to Kafka
+        private long committedOffset;               // last offset committed to Kafka
         private long toCommitOffset;                // last offset to be committed in the next commit operation
         private final Set<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // sort messages by ascending order of offset
         private Set<MessageId> toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        // Messages that contain the offsets to be committed in the next commit operation
+        private TopicPartition tp;
 
         public OffsetEntry(TopicPartition tp) {
+            this.tp = tp;
             OffsetAndMetadata committed = kafkaConsumer.committed(tp);
             committedOffset = committed == null ? -1 : committed.offset();
             LOG.debug("Created OffsetEntry for [topic-partition={}, last-committed-offset={}]", tp, committedOffset);
@@ -374,21 +388,23 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             MessageId toCommitMsg = null;
 
             for (MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
-                if ((currOffset = ackedMsg.offset()) == toCommitOffset || currOffset == toCommitOffset + 1) {    // found the next offset to commit
-                    toCommitMsgs.add(ackedMsg);
-                    toCommitMsg = ackedMsg;
-                    toCommitOffset = currOffset;
-                } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
-                    break;
-                } else {
-                    LOG.debug("Unexpected offset found [{]}. {}", ackedMsg.offset(), toString());
-                    break;
+                if ((currOffset = ackedMsg.offset()) != toCommitOffset) {
+                    if (currOffset == toCommitOffset + 1) {    // found the next offset to commit
+                        toCommitMsgs.add(ackedMsg);
+                        toCommitMsg = ackedMsg;
+                        toCommitOffset = currOffset;
+                    } else if (ackedMsg.offset() > toCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
+                        break;
+                    } else {
+                        LOG.debug("Unexpected offset found [{}]. {}", ackedMsg.offset(), toString());
+                        break;
+                    }
                 }
             }
 
             if (!toCommitMsgs.isEmpty()) {
                 offsetAndMetadata = new OffsetAndMetadata(toCommitOffset, toCommitMsg.getMetadata(Thread.currentThread()));
-                LOG.debug("Last offset to be committed in the next commit call: [{]}", offsetAndMetadata.offset());
+                LOG.debug("Last offset to be committed in the next commit call: [{}]", offsetAndMetadata.offset());
                 LOG.trace(toString());
             } else {
                 LOG.debug("No offsets found ready to commit");
@@ -415,7 +431,8 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         @Override
         public String toString() {
             return "OffsetEntry{" +
-                    "committedOffset=" + committedOffset +
+                    "topic-partition=" + tp +
+                    ", committedOffset=" + committedOffset +
                     ", toCommitOffset=" + toCommitOffset +
                     ", ackedMsgs=" + ackedMsgs +
                     ", toCommitMsgs=" + toCommitMsgs +
