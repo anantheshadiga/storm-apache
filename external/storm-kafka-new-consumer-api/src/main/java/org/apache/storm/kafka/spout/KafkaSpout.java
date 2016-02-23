@@ -51,8 +51,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private static final Comparator<MessageId> OFFSET_COMPARATOR = new OffsetComparator();
 
     // Storm
-    private Map conf;
-    private TopologyContext context;
     protected SpoutOutputCollector collector;
 
     // Kafka
@@ -80,8 +78,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
         // Spout internals
-        this.conf = conf;
-        this.context = context;
         this.collector = collector;
 
         // Bookkeeping objects
@@ -296,30 +292,28 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         // lock because ack and commit happen in different threads
         ackCommitLock.lock();
         try {
-            for (TopicPartition tp : acked.keySet()) {
-                final OffsetEntry offsetEntry = acked.get(tp);
-                OffsetAndMetadata offsetAndMetadata = offsetEntry.findOffsetToCommit();
+            for (Map.Entry<TopicPartition, OffsetEntry> tpOffset : acked.entrySet()) {
+                final OffsetAndMetadata offsetAndMetadata = tpOffset.getValue().findOffsetToCommit();
                 if (offsetAndMetadata != null) {
-                    toCommitOffsets.put(tp, offsetAndMetadata);
+                    toCommitOffsets.put(tpOffset.getKey(), offsetAndMetadata);
                 }
             }
 
             if (!toCommitOffsets.isEmpty()) {
                 kafkaConsumer.commitSync(toCommitOffsets);
-                LOG.debug("Offsets successfully committed to Kafka [{]}", toCommitOffsets);
-                // Instead of iterating again, we could commit each TopicPartition in the prior loop,
-                // but the multiple networks calls should be more expensive than iterating twice over a small loop
-                for (TopicPartition tp : acked.keySet()) {
-                    OffsetEntry offsetEntry = acked.get(tp);
-                    offsetEntry.updateAckedState(toCommitOffsets.get(tp));
-                    updateAckedState(tp, offsetEntry);
+                LOG.debug("Offsets successfully committed to Kafka [{}]", toCommitOffsets);
+                // Instead of iterating again, we could commit and update state for each TopicPartition in the prior loop,
+                // but the multiple network calls should be more expensive than iterating twice over a small loop
+                for (Map.Entry<TopicPartition, OffsetEntry> tpOffset : acked.entrySet()) {
+                    final OffsetEntry offsetEntry = tpOffset.getValue();
+                    offsetEntry.updateAckedState(toCommitOffsets.get(tpOffset.getKey()));
                 }
             } else {
                 LOG.trace("No offsets to commit. {}", toString());
             }
 
         } catch (Exception e) {
-            LOG.error("Exception occurred while committing acked tuples offsets to Kafka", e);
+            LOG.error("Exception occurred while committing acked offsets to Kafka", e);
         } finally {
             commit = false;
             ackCommitLock.unlock();
@@ -421,6 +415,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 committedOffset = offsetAndMetadata.offset();
                 toCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
                 ackedMsgs.removeAll(toCommitMsgs);
+                KafkaSpout.this.updateAckedState(tp, this);
             }
         }
 
