@@ -66,44 +66,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         this.tupleBuilder = tupleBuilder;
     }
 
-    class Timer {
-        private final long frequency;
-        private final long delay;
-        private final TimeUnit timeUnit;
-        private final long frequencyNanos;
-        private long start;
-
-        /** Creates a timer to expire at the given frequency and starting with the specified time delay */
-        public Timer(long frequency, long delay, TimeUnit timeUnit) {
-            this.frequency = frequency;
-            this.delay = delay;
-            this.timeUnit = timeUnit;
-
-            frequencyNanos = timeUnit.toNanos(frequency);
-            start = System.nanoTime() + timeUnit.toNanos(delay);
-        }
-
-        public long frequency() {
-            return frequency;
-        }
-
-        public long delay() {
-            return delay;
-        }
-
-        public TimeUnit getTimeUnit() {
-            return timeUnit;
-        }
-
-        public boolean expired() {
-            final boolean expired = System.nanoTime() - start > frequencyNanos;
-            if (expired) {
-                start = System.nanoTime();
-            }
-            return expired;
-        }
-    }
-
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
         // Spout internals
@@ -119,7 +81,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         kafkaConsumer.subscribe(kafkaSpoutConfig.getSubscribedTopics(), new KafkaSpoutConsumerRebalanceListener());
 
         // Create commit offsets timer
-
         if (!kafkaSpoutConfig.isConsumerAutoCommitMode()) {     // If it is auto commit, no need to commit offsets manually
             timer = new Timer(kafkaSpoutConfig.getOffsetsCommitFreqMs(), 500, TimeUnit.MILLISECONDS);
         }
@@ -137,7 +98,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     }
 
     private boolean commit() {
-        return timer != null && timer.expired();
+        return timer != null && timer.expired();    // timer == null for auto commit mode
     }
 
     private ConsumerRecords<K, V> poll() {
@@ -366,4 +327,50 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
         }
     }
+
+    // =========== Timer ===========
+
+    private class Timer {
+        private final long frequency;
+        private final long delay;
+        private final TimeUnit timeUnit;
+        private final long frequencyNanos;
+        private long start;
+
+        /** Creates a timer to expire at the given frequency and starting with the specified time delay */
+        public Timer(long frequency, long delay, TimeUnit timeUnit) {
+            this.frequency = frequency;
+            this.delay = delay;
+            this.timeUnit = timeUnit;
+
+            frequencyNanos = timeUnit.toNanos(frequency);
+            start = System.nanoTime() + timeUnit.toNanos(delay);
+        }
+
+        public long frequency() {
+            return frequency;
+        }
+
+        public long delay() {
+            return delay;
+        }
+
+        public TimeUnit getTimeUnit() {
+            return timeUnit;
+        }
+
+        /**
+         * If this method returns true, a new timer cycle will start.
+         * @return true if the elapsed time since the last true value call to this method is greater or
+         * equal to the frequency specified upon creation of this timer. Returns false otherwise.
+         */
+        public boolean expired() {
+            final boolean expired = System.nanoTime() - start > frequencyNanos;
+            if (expired) {
+                start = System.nanoTime();
+            }
+            return expired;
+        }
+    }
+
 }

@@ -44,15 +44,36 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         String VALUE_DESERIALIZER = "value.deserializer";
     }
 
+    /**
+     * The offset used by the Kafka spout in the first poll to Kafka broker. The choice of this parameter will
+     * affect the number of consumer records returned in the first poll. By default this parameter set to UNCOMMITTED_EARLIEST. <br/><br/>
+     * The allowed values are EARLIEST, LATEST, UNCOMMITTED_EARLIEST, UNCOMMITTED_LATEST. <br/>
+     * <ul>
+     * <li>EARLIEST means that the kafka spout polls records starting in the first offset of the partition.</li>
+     * <li>LATEST means that the kafka spout polls records with offsets greater than the last offset in the partition.</li>
+     * <li>UNCOMMITTED_EARLIEST means that the kafka spout polls records from the last committed offset, if any.
+     * If no offset has been committed, it behaves as EARLIEST.</li>
+     * <li>UNCOMMITTED_LATEST means that the kafka spout polls records from the last committed offset, if any.<br/>
+     * If no offset has been committed, it behaves as LATEST.</li>
+     * </ul>
+     * */
+    public enum FirstPollOffset {
+        EARLIEST,
+        LATEST,
+        UNCOMMITTED_EARLIEST,
+        UNCOMMITTED_LATEST }
+
+    // Kafka consumer configuration
     private final Map<String, Object> kafkaProps;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private List<String> topics;
-
+    private FirstPollOffset firstPollOffset;
     private final long pollTimeoutMs;
+
+    // Kafka spout configuration
     private long commitFreqMs;
     private int maxRetries;
-
 
     private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = builder.kafkaProps;
@@ -62,6 +83,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         this.commitFreqMs = builder.commitFreqMs;
         this.topics = builder.topics;
         this.maxRetries = builder.maxRetries;
+        this.firstPollOffset = builder.firstPollOffset;
     }
 
     public static class Builder<K,V> {
@@ -72,6 +94,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         private long commitFreqMs = DEFAULT_COMMIT_FREQ_MS;
         private int maxRetries = DEFAULT_MAX_RETRIES;
         private List<String> topics;
+        private FirstPollOffset firstPollOffset = FirstPollOffset.UNCOMMITTED_EARLIEST;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -139,6 +162,16 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
             return this;
         }
 
+        /**
+         * Sets the offset used by the Kafka spout in the first poll to Kafka broker upon process start.
+         * Please refer to to the documentation in {@link FirstPollOffset}
+         * @param firstPollOffset Offset used by Kafka spout first poll
+         * */
+        public Builder<K, V> setFirstPollOffset(FirstPollOffset firstPollOffset) {
+            this.firstPollOffset = firstPollOffset;
+            return this;
+        }
+
         public KafkaSpoutConfig<K,V> build() {
             return new KafkaSpoutConfig<>(this);
         }
@@ -179,5 +212,9 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
 
     public int getMaxTupleRetries() {
         return maxRetries;
+    }
+
+    public FirstPollOffset getFirstPollOffset() {
+        return firstPollOffset;
     }
 }
