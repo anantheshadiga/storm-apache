@@ -19,10 +19,10 @@
 package org.apache.storm.kafka.spout;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.storm.tuple.Values;
 
 import java.io.Serializable;
+import java.util.List;
 
 public interface KafkaTupleBuilder<K,V> extends Serializable {
-    Values buildTuple(ConsumerRecord<K, V> consumerRecord);
+    List<Object> buildTuple(ConsumerRecord<K, V> consumerRecord);
 }

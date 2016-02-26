@@ -20,15 +20,15 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.storm.tuple.Values;
 
+import java.util.List;
+
 public class KafkaRecordTupleBuilder<K,V> implements org.apache.storm.kafka.spout.KafkaTupleBuilder<K, V> {
     @Override
-    public Values buildTuple(final ConsumerRecord<K, V> consumerRecord) {
-        return new Values() {{
-            add(consumerRecord.topic());
-            add(consumerRecord.partition());
-            add(consumerRecord.offset());
-            add(consumerRecord.key());
-            add(consumerRecord.value());
-        }};
+    public List<Object> buildTuple(final ConsumerRecord<K, V> consumerRecord) {
+        return new Values(consumerRecord.topic(),
+            consumerRecord.partition(),
+            consumerRecord.offset(),
+            consumerRecord.key(),
+            consumerRecord.value());
     }
 }
