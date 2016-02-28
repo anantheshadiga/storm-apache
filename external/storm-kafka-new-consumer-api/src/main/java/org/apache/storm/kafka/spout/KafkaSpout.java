@@ -138,9 +138,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         for (TopicPartition tp : consumerRecords.partitions()) {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit/poll either per topic or per partition
 
-            int i = 0;
-            for (Iterator<ConsumerRecord<K, V>> iterator = records.iterator(); iterator.hasNext(); ) {
-                final ConsumerRecord<K, V> record = iterator.next();
+            for (final ConsumerRecord<K, V> record : records) {
                 final List<Object> tuple = tupleBuilder.buildTuple(record);
                 final MessageId messageId = new MessageId(record, tuple);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
 
@@ -320,14 +318,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         public void updateAckedState(OffsetAndMetadata offsetAndMetadata) {
             if (offsetAndMetadata != null) {
                 committedOffset = offsetAndMetadata.offset();
-                /*final Iterator<MessageId> iterator = ackedMsgs.iterator();
-//                MessageId ackedMsg = iterator.next();
-                MessageId ackedMsg = null;
-
-                while (iterator.hasNext()ackedMsg.offset() <= offsetAndMetadata.offset())) {
-                    ackedMsg = iterator.next();
-                    iterator.remove();
-                }*/
                 for (Iterator<MessageId> iterator1 = ackedMsgs.iterator();
                      iterator1.hasNext(); ) {
                     if (iterator1.next().offset() <= offsetAndMetadata.offset()) {
