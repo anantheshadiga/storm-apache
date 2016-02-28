@@ -114,7 +114,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     @Override
     public void nextTuple() {
         if (initialized) {
-//        if (true) {
             if(commit()) {
                 commitOffsetsForAckedTuples();
             } else {
@@ -164,9 +163,11 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         switch(firstPollOffsetStrategy) {
             case EARLIEST:
                 return 0;       //TODO Bug in here
+//                return kafkaConsumer.position()0;       //TODO Bug in here
             case LATEST:
                 return record.offset();
             case UNCOMMITTED_EARLIEST:
+//                ssss
             case UNCOMMITTED_LATEST:
                 return kafkaConsumer.committed(tp) .offset();
             default:
@@ -175,15 +176,18 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         return record.offset();
     }
 
+
+
     // ======== Ack =======
     @Override
     public void ack(Object messageId) {
         final MessageId msgId = (MessageId) messageId;
         final TopicPartition tp = msgId.getTopicPartition();
 
-        //TODO: NPE
-
         if (!consumerAutoCommitMode) {  // Only need to keep track of acked tuples if commits are not done automatically
+            if (!acked.containsKey(tp)) {
+                acked.put(tp, new OffsetEntry(tp, ));
+            }
             acked.get(tp).add(msgId);
             LOG.debug("Adding acked message to [{}] to list of messages to be committed to Kafka", msgId);
         }
@@ -384,10 +388,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            /*if (!open) {
-                throw new IllegalStateException("Spout's open() method should have completed before partitions get assigned");
-            }*/
-
             LOG.debug("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
 
@@ -397,32 +397,28 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
 
         private void initialize(Collection<TopicPartition> partitions) {
-            // Save the last committed offsets. This is done before the poll(0) bellow to assure that the dummy, but necessary,
-            // poll(0) does not cause the meaningful polls to start at the wrong offset
-            final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
             for (TopicPartition tp: partitions) {
-                committedOffsets.put(tp, kafkaConsumer.committed(tp));
-                LOG.debug("Kafka consumer state snapshot at initialization: {}", committedOffsets);
+                final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
+                long fetchOffset = doSeek(tp, committedOffset);
+                setAcked(tp, fetchOffset);
             }
-
-            kafkaConsumer.poll(0);  // this is a temporary workaround to avoid a Kafka limitation: Kafka throws IllegalStateException if seek(..) is called before commit(..)
-
-            for (TopicPartition tp: partitions) {
-                doSeek(tp, committedOffsets.get(tp));
-            }
+            acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
             initialized = true;
             LOG.debug("Initialization complete");
         }
 
-        private void doSeek(TopicPartition tp, OffsetAndMetadata committedOffset) {
-            if (committedOffset != null)  {     // offset were committed for this TopicPartition
+        private long doSeek(TopicPartition tp, OffsetAndMetadata committedOffset) {
+            long fetchOffset;
+            if (committedOffset != null)  {     // fetchOffset was committed for this TopicPartition
                 if (firstPollOffsetStrategy.equals(EARLIEST)) {
                     kafkaConsumer.seekToBeginning(tp);
+                    fetchOffset = kafkaConsumer.position(tp);
                 } else if (firstPollOffsetStrategy.equals(LATEST)) {
                     kafkaConsumer.seekToEnd(tp);
+                    fetchOffset = kafkaConsumer.position(tp);
                 } else {
-                    // do nothing - by default polling starts at the lat committed offset
-//                    kafkaConsumer.seek(tp, committedOffset.offset());
+                    // do nothing - by default polling starts at the lat committed fetchOffset
+                    fetchOffset = committedOffset.offset();
                 }
             } else {    // no previous commit occurred, so start at the beginning or end depending on the strategy
                 if (firstPollOffsetStrategy.equals(EARLIEST) || firstPollOffsetStrategy.equals(UNCOMMITTED_EARLIEST)) {
@@ -430,7 +426,14 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 } else if (firstPollOffsetStrategy.equals(LATEST) || firstPollOffsetStrategy.equals(UNCOMMITTED_LATEST)) {
                     kafkaConsumer.seekToEnd(tp);
                 }
+                fetchOffset = kafkaConsumer.position(tp);
             }
+            return fetchOffset;
+        }
+
+        private void setAcked(TopicPartition tp, long fetchOffset) {
+            if (!acked.containsKey(tp))
+                acked.put(tp, new OffsetEntry(tp, fetchOffset));
         }
     }
 
