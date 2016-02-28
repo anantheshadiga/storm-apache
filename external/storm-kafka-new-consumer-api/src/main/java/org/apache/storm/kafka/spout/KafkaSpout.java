@@ -320,15 +320,25 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         public void updateAckedState(OffsetAndMetadata offsetAndMetadata) {
             if (offsetAndMetadata != null) {
                 committedOffset = offsetAndMetadata.offset();
-                final Iterator<MessageId> iterator = ackedMsgs.iterator();
-                MessageId ackedMsg = iterator.next();
-                while (iterator.hasNext() && ackedMsg.offset() <= offsetAndMetadata.offset()) {
-                    iterator.remove();
+                /*final Iterator<MessageId> iterator = ackedMsgs.iterator();
+//                MessageId ackedMsg = iterator.next();
+                MessageId ackedMsg = null;
+
+                while (iterator.hasNext()ackedMsg.offset() <= offsetAndMetadata.offset())) {
                     ackedMsg = iterator.next();
+                    iterator.remove();
+                }*/
+                for (Iterator<MessageId> iterator1 = ackedMsgs.iterator();
+                     iterator1.hasNext(); ) {
+                    if (iterator1.next().offset() <= offsetAndMetadata.offset()) {
+                        iterator1.remove();
+                    } else {
+                        break;
+                    }
                 }
 //                nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        for debug
             }
-            LOG.debug("Object state after update", toString());
+            LOG.trace("Object state after update: {}", toString());
         }
 
         public boolean isEmpty() {
