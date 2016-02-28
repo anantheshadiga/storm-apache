@@ -264,7 +264,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         public OffsetEntry(TopicPartition tp, long committedOffset) {
             this.tp = tp;
             this.committedOffset = committedOffset;
-            LOG.debug("Created OffsetEntry for [topic-partition={}, last-committed-offset={}]", tp, committedOffset);
+            LOG.debug("Created OffsetEntry for [topic-partition={}, committed-or-fetch-offset={}]", tp, committedOffset);
         }
 
         public void add(MessageId msgId) {          // O(Log N)
@@ -276,16 +276,17 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
          * @return the next OffsetAndMetadata to commit, or null if no offset is ready to commit.
          */
         public OffsetAndMetadata findNextCommitOffset() {
-            long currOffset;
-            MessageId nextCommitMsg = null;     // this convenience field is used to make it faster to create OffsetAndMetadata
-            long nextCommitOffset = committedOffset;
             boolean found = false;
+            long currOffset;
+            long nextCommitOffset = committedOffset;
+            MessageId nextCommitMsg = null;     // this is a convenience field to make it faster to create OffsetAndMetadata
 //            nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
                                                     //TODO Offset by one issue or don't remove from acks issue
             for (MessageId currAckedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
-//                if ((currOffset = currAckedMsg.offset()) != nextCommitOffset) {     // this is to void duplication because the first message polled is the last message acked.
-                    if (((currOffset = currAckedMsg.offset()) == nextCommitOffset + 1)
-                            || (currOffset == 0 && nextCommitOffset == 0)) {            // found the next offset to commit
+                if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {     // this is to void duplication because the first message polled is the last message acked.
+//                    if (((currOffset = currAckedMsg.offset()) == nextCommitOffset + 1)
+//                            || (currOffset == 0 && nextCommitOffset == 0)) {            // found the next offset to commit
+                    if (currOffset == nextCommitOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
 //                        nextCommitMsgs.add(currAckedMsg);         // for debug
                         found = true;
                         nextCommitMsg = currAckedMsg;
@@ -298,7 +299,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                         LOG.debug("Unexpected offset found [{}]. {}", currOffset, toString());
                         break;
                     }
-//                }
+                }
             }
 
             OffsetAndMetadata offsetAndMetadata = null;
@@ -327,6 +328,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                 }
 //                nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        for debug
             }
+            LOG.debug("Object state after update", toString());
         }
 
         public boolean isEmpty() {
