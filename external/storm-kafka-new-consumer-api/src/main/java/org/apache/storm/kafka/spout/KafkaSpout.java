@@ -338,10 +338,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            initialized = false;
             LOG.debug("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
             if (!consumerAutoCommitMode && initialized) {
+                initialized = false;
                 commitOffsetsForAckedTuples();
             }
         }
@@ -351,9 +351,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             LOG.debug("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
 
-            if (!initialized && !consumerAutoCommitMode) {         // This logic should be run only once, during the first time during spout initialization
-                initialize(partitions);
-            }
+            initialize(partitions);
         }
 
         private void initialize(Collection<TopicPartition> partitions) {
@@ -393,7 +391,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
 
         private void setAcked(TopicPartition tp, long fetchOffset) {
-            if (!acked.containsKey(tp)) {           // If this partition was previously assigned, leave the acked offsets as they were to resume where it left off
+            if (!consumerAutoCommitMode && !acked.containsKey(tp)) {           // If this partition was previously assigned, leave the acked offsets as they were to resume where it left off
                 acked.put(tp, new OffsetEntry(tp, fetchOffset));
             }
         }
