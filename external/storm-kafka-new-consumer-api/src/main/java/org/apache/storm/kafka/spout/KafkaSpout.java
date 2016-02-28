@@ -146,37 +146,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
                 collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
                 LOG.debug("Emitted tuple [{}] for record [{}]", tuple, record);
-
-                // We need to create OffsetEntry here because there is no way to retrieve the largest non committed offset from KafkaConsumer
-                // creates OffsetEntry with the latest, non-committed offset, if the strategy is LATEST
-                if (!consumerAutoCommitMode && !iterator.hasNext() /*it's last record */ && !acked.containsKey(tp)) {
-                    acked.put(tp, new OffsetEntry(tp, committedOffset(tp, record)));
-                }
             }
         }
     }
-
-    /**
-     * @return 0 if strategy is EARLIEST, largest, non-committed offset, if the strategy is LATEST, or largest committed offset otherwise
-     */
-    private long committedOffset(TopicPartition tp, ConsumerRecord<K, V> record) {
-        switch(firstPollOffsetStrategy) {
-            case EARLIEST:
-                return 0;       //TODO Bug in here
-//                return kafkaConsumer.position()0;       //TODO Bug in here
-            case LATEST:
-                return record.offset();
-            case UNCOMMITTED_EARLIEST:
-//                ssss
-            case UNCOMMITTED_LATEST:
-                return kafkaConsumer.committed(tp) .offset();
-            default:
-                break;
-        }
-        return record.offset();
-    }
-
-
 
     // ======== Ack =======
     @Override
@@ -185,9 +157,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         final TopicPartition tp = msgId.getTopicPartition();
 
         if (!consumerAutoCommitMode) {  // Only need to keep track of acked tuples if commits are not done automatically
-            if (!acked.containsKey(tp)) {
-                acked.put(tp, new OffsetEntry(tp, ));
-            }
             acked.get(tp).add(msgId);
             LOG.debug("Adding acked message to [{}] to list of messages to be committed to Kafka", msgId);
         }
@@ -235,6 +204,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
+    // TODO must declare multiple output streams
     @Override
     public void declareOutputFields(OutputFieldsDeclarer declarer) {
         declarer.declareStream(kafkaSpoutStream.getStreamId(), kafkaSpoutStream.getOutputFields());
@@ -270,12 +240,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
     }
 
-    private void updateAckedState(TopicPartition tp, OffsetEntry offsetEntry) {
-        if (offsetEntry.isEmpty()) {
-            acked.remove(tp);
-        }
-    }
-
     @Override
     public String toString() {
         return "{acked=" + acked + "} ";
@@ -292,10 +256,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     /** This class is not thread safe */
     private class OffsetEntry {
         private final TopicPartition tp;
-        private long committedOffset;               // last offset committed to Kafka
-        private long nextCommitOffset;              // last continoue offset to be committed in the next commit operation
+        private long committedOffset;               // last offset committed to Kafka, or initial fetching offset (initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener)
+//        private long nextCommitOffset;              // last continuous offset to be committed in the next commit operation
         private final NavigableSet<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // acked messages sorted by ascending order of offset
-        private NavigableSet<MessageId> nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        // Messages that contain the offsets to be committed in the next commit operation
+//        private NavigableSet<MessageId> nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);      // Messages that contain the offsets to be committed in the next commit operation
 
         public OffsetEntry(TopicPartition tp, long committedOffset) {
             this.tp = tp;
@@ -314,28 +278,31 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         public OffsetAndMetadata findNextCommitOffset() {
             long currOffset;
             MessageId nextCommitMsg = null;     // this convenience field is used to make it faster to create OffsetAndMetadata
-            nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
-            nextCommitOffset = committedOffset;
+            long nextCommitOffset = committedOffset;
+            boolean found = false;
+//            nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
                                                     //TODO Offset by one issue or don't remove from acks issue
-            for (MessageId ackedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
-                if ((currOffset = ackedMsg.offset()) != nextCommitOffset) {     // this is to void duplication because the first message polled is the last message acked.
-                    if (currOffset == nextCommitOffset + 1) {                   // found the next offset to commit
-                        nextCommitMsgs.add(ackedMsg);
-                        nextCommitMsg = ackedMsg;
+            for (MessageId currAckedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
+//                if ((currOffset = currAckedMsg.offset()) != nextCommitOffset) {     // this is to void duplication because the first message polled is the last message acked.
+                    if (((currOffset = currAckedMsg.offset()) == nextCommitOffset + 1)
+                            || (currOffset == 0 && nextCommitOffset == 0)) {            // found the next offset to commit
+//                        nextCommitMsgs.add(currAckedMsg);         // for debug
+                        found = true;
+                        nextCommitMsg = currAckedMsg;
                         nextCommitOffset = currOffset;
                         LOG.trace("Found offset to commit [{}]. {}", currOffset, toString());
-                    } else if (ackedMsg.offset() > nextCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
+                    } else if (currAckedMsg.offset() > nextCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
                         LOG.debug("Non continuous offset found [{}]. It will be processed in a subsequent batch. {}", currOffset, toString());
                         break;
                     } else {
                         LOG.debug("Unexpected offset found [{}]. {}", currOffset, toString());
                         break;
                     }
-                }
+//                }
             }
 
             OffsetAndMetadata offsetAndMetadata = null;
-            if (!nextCommitMsgs.isEmpty()) {
+            if (found) {
                 offsetAndMetadata = new OffsetAndMetadata(nextCommitOffset, nextCommitMsg.getMetadata(Thread.currentThread()));
                 LOG.debug("Offset to be committed next: [{}]", offsetAndMetadata.offset());
                 LOG.trace(toString());
@@ -352,9 +319,13 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         public void updateAckedState(OffsetAndMetadata offsetAndMetadata) {
             if (offsetAndMetadata != null) {
                 committedOffset = offsetAndMetadata.offset();
-                ackedMsgs.removeAll(nextCommitMsgs);
-                nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
-                KafkaSpout.this.updateAckedState(tp, this);
+                final Iterator<MessageId> iterator = ackedMsgs.iterator();
+                MessageId ackedMsg = iterator.next();
+                while (iterator.hasNext() && ackedMsg.offset() <= offsetAndMetadata.offset()) {
+                    iterator.remove();
+                    ackedMsg = iterator.next();
+                }
+//                nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        for debug
             }
         }
 
@@ -367,9 +338,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             return "OffsetEntry{" +
                     "topic-partition=" + tp +
                     ", committedOffset=" + committedOffset +
-                    ", nextCommitOffset=" + nextCommitOffset +
+//                    ", nextCommitOffset=" + nextCommitOffset +
                     ", ackedMsgs=" + ackedMsgs +
-                    ", nextCommitMsgs=" + nextCommitMsgs +
+//                    ", nextCommitMsgs=" + nextCommitMsgs +    // for debug
                     '}';
         }
     }
@@ -391,22 +362,23 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             LOG.debug("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
 
-            if (!initialized) {         // This logic should be run only once, during the first time during spout initialization
+            if (!initialized && !consumerAutoCommitMode) {         // This logic should be run only once, during the first time during spout initialization
                 initialize(partitions);
             }
         }
 
         private void initialize(Collection<TopicPartition> partitions) {
+            acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
             for (TopicPartition tp: partitions) {
                 final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
-                long fetchOffset = doSeek(tp, committedOffset);
+                final long fetchOffset = doSeek(tp, committedOffset);
                 setAcked(tp, fetchOffset);
             }
-            acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
             initialized = true;
             LOG.debug("Initialization complete");
         }
 
+        /** sets the cursor to the location dictated by the first poll strategy and returns the fetch offset */
         private long doSeek(TopicPartition tp, OffsetAndMetadata committedOffset) {
             long fetchOffset;
             if (committedOffset != null)  {     // fetchOffset was committed for this TopicPartition
@@ -432,8 +404,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         }
 
         private void setAcked(TopicPartition tp, long fetchOffset) {
-            if (!acked.containsKey(tp))
+            if (!acked.containsKey(tp)) {           // If this partition was previously assigned, leave the acked offsets as they were to resume where it left off
                 acked.put(tp, new OffsetEntry(tp, fetchOffset));
+            }
         }
     }
 

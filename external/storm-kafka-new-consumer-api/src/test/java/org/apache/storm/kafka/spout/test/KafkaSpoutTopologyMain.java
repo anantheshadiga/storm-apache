@@ -38,6 +38,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
+
 public class KafkaSpoutTopologyMain {
 
     public static void main(String[] args) throws Exception {
@@ -82,7 +84,8 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig() {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), getTopics()).setCommitFreqMs(10_000).build();
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(),
+                getTopics()).setCommitFreqMs(10_000).setFirstPollOffsetStrategy(UNCOMMITTED_EARLIEST).build();
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {
