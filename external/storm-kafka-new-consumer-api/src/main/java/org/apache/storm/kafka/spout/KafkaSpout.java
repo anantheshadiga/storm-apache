@@ -66,9 +66,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private transient Timer timer;                                    // timer == null for auto commit mode
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed by the commitOffsetsTask or on consumer rebalance
     private transient int maxRetries;                                 // Max number of times a tuple is retried
-//    private transient boolean firstPollComplete;  // TODO Delete
-    private transient boolean open;                 // Flat that is set to true once the open method completes. This is used by the callback KafkaSpoutConsumerRebalanceListener
-                                                    // to guarantee that open method has completed and all the state is set before the callback
     private transient boolean initialized;          // Flag indicating that the spout is still undergoing initialization process.
                                                     // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
 
@@ -81,7 +78,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
 
     @Override
     public void open(Map conf, TopologyContext context, SpoutOutputCollector collector) {
-        open = false;
         initialized = false;
 
         // Spout internals
@@ -105,7 +101,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
         // KafkaSpoutConsumerRebalanceListener will be called foloowing this poll upon partition registration
         kafkaConsumer.poll(0);
 
-        open = true;
         LOG.debug("Kafka Spout opened with the following configuration: {}", kafkaSpoutConfig.toString());
     }
 
@@ -139,11 +134,13 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());     // TODO Decide if want to give flexibility to emmit/poll either per topic or per partition
 
             for (final ConsumerRecord<K, V> record : records) {
-                final List<Object> tuple = tupleBuilder.buildTuple(record);
-                final MessageId messageId = new MessageId(record, tuple);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
+                if (record.offset() == 0 || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
+                    final List<Object> tuple = tupleBuilder.buildTuple(record);
+                    final MessageId messageId = new MessageId(record, tuple);                                  // TODO don't create message for non acking mode. Should we support non acking mode?
 
-                collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
-                LOG.debug("Emitted tuple [{}] for record [{}]", tuple, record);
+                    collector.emit(kafkaSpoutStream.getStreamId(), tuple, messageId);           // emits one tuple per record
+                    LOG.debug("Emitted tuple [{}] for record [{}]", tuple, record);
+                }
             }
         }
     }
@@ -255,14 +252,12 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private class OffsetEntry {
         private final TopicPartition tp;
         private long committedOffset;               // last offset committed to Kafka, or initial fetching offset (initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener)
-//        private long nextCommitOffset;              // last continuous offset to be committed in the next commit operation
         private final NavigableSet<MessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // acked messages sorted by ascending order of offset
-//        private NavigableSet<MessageId> nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);      // Messages that contain the offsets to be committed in the next commit operation
 
         public OffsetEntry(TopicPartition tp, long committedOffset) {
             this.tp = tp;
             this.committedOffset = committedOffset;
-            LOG.debug("Created OffsetEntry for [topic-partition={}, committed-or-fetch-offset={}]", tp, committedOffset);
+            LOG.debug("Created OffsetEntry for [topic-partition={}, committed-or-initial-fetch-offset={}]", tp, committedOffset);
         }
 
         public void add(MessageId msgId) {          // O(Log N)
@@ -278,14 +273,10 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             long currOffset;
             long nextCommitOffset = committedOffset;
             MessageId nextCommitMsg = null;     // this is a convenience field to make it faster to create OffsetAndMetadata
-//            nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);
                                                     //TODO Offset by one issue or don't remove from acks issue
-            for (MessageId currAckedMsg : ackedMsgs) {  // for K matching messages complexity is K*(Log*N). K <= N
+            for (MessageId currAckedMsg : ackedMsgs) {  // complexity is that of a linear scan on a TreeMap
                 if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {     // this is to void duplication because the first message polled is the last message acked.
-//                    if (((currOffset = currAckedMsg.offset()) == nextCommitOffset + 1)
-//                            || (currOffset == 0 && nextCommitOffset == 0)) {            // found the next offset to commit
                     if (currOffset == nextCommitOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
-//                        nextCommitMsgs.add(currAckedMsg);         // for debug
                         found = true;
                         nextCommitMsg = currAckedMsg;
                         nextCommitOffset = currOffset;
@@ -303,11 +294,9 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             OffsetAndMetadata offsetAndMetadata = null;
             if (found) {
                 offsetAndMetadata = new OffsetAndMetadata(nextCommitOffset, nextCommitMsg.getMetadata(Thread.currentThread()));
-                LOG.debug("Offset to be committed next: [{}]", offsetAndMetadata.offset());
-                LOG.trace(toString());
+                LOG.trace("Offset to be committed next: [{}] {}", offsetAndMetadata.offset(), toString());
             } else {
-                LOG.debug("No offsets ready to commit");
-                LOG.trace(toString());
+                LOG.debug("No offsets ready to commit", toString());
             }
             return offsetAndMetadata;
         }
@@ -326,7 +315,6 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
                         break;
                     }
                 }
-//                nextCommitMsgs = new TreeSet<>(OFFSET_COMPARATOR);        for debug
             }
             LOG.trace("Object state after update: {}", toString());
         }
@@ -340,9 +328,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
             return "OffsetEntry{" +
                     "topic-partition=" + tp +
                     ", committedOffset=" + committedOffset +
-//                    ", nextCommitOffset=" + nextCommitOffset +
                     ", ackedMsgs=" + ackedMsgs +
-//                    ", nextCommitMsgs=" + nextCommitMsgs +    // for debug
                     '}';
         }
     }
@@ -352,6 +338,7 @@ public class KafkaSpout<K,V> extends BaseRichSpout {
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            initialized = false;
             LOG.debug("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
             if (!consumerAutoCommitMode && initialized) {
