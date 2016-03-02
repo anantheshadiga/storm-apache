@@ -334,10 +334,10 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             boolean found = false;
             long currOffset;
             long nextCommitOffset = committedOffset;
-            MessageId nextCommitMsg = null;     // this is a convenience field to make it faster to create OffsetAndMetadata
+            MessageId nextCommitMsg = null;     // this is a convenience variable to make it faster to create OffsetAndMetadata
 
             for (MessageId currAckedMsg : ackedMsgs) {  // complexity is that of a linear scan on a TreeMap
-                if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {     // this is to void duplication because the first message polled is the last message acked.
+                if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {      // The first poll includes the last committed offset. This if avoids duplication
                     if (currOffset == nextCommitOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
                         found = true;
                         nextCommitMsg = currAckedMsg;
@@ -408,8 +408,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
         /**
          * Creates a class that mimics a single threaded timer that expires periodically.
-         * If a call to {@link #isExpiredResetOnTrue()} occurs later than {@code period}, this method returns true.
-         * Each time the method returns true the counter is reset. The timer starts with the specified time delay.
+         * If a call to {@link #isExpiredResetOnTrue()} occurs later than {@code period} since the timer was initiated or reset,
+         * this method returns true. Each time the method returns true the counter is reset.
+         * The timer starts with the specified time delay.
          *
          *  @param delay the initial delay before the timer starts
          *  @param period the period between calls {@link #isExpiredResetOnTrue()}
@@ -437,7 +438,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         }
 
         /**
-         * Checks if a call to this method occurs later than {@code period} since the timer was initiated.
+         * Checks if a call to this method occurs later than {@code period} since the timer was initiated or reset.
          * If that is the case the method returns true, otherwise it returns false. Each time this method returns true,
          * the counter is reset (re-initiated) and a new cycle will start.
          *
