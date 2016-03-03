@@ -249,7 +249,7 @@
         <calcite.version>1.4.0-incubating</calcite.version>
         <jackson.version>2.6.3</jackson.version>
         <maven-surefire.version>2.18.1</maven-surefire.version>
-        <kafka.version>0.9.0.0</kafka.version>
+        <kafka.version>0.9.0.1</kafka.version>
         <kafka.artifact.id>kafka_2.11</kafka.artifact.id>
 
         <!-- Java and clojure build lifecycle test properties are defined here to avoid having to create a default profile -->
@@ -871,7 +871,6 @@
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
                 <version>${kafka.version}</version>
-                <scope>provided</scope>
             </dependency>
             <dependency>
                 <groupId>uk.org.lidalia</groupId>
