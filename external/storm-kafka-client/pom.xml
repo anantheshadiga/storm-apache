@@ -27,8 +27,8 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>storm-kafka-new-consumer-api</artifactId>
-    <name>storm-kafka-new-consumer-api</name>
+    <artifactId>storm-kafka-client</artifactId>
+    <name>storm-kafka-client</name>
 
     <packaging>jar</packaging>
 

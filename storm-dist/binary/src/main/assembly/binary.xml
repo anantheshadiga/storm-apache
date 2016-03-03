@@ -304,15 +304,15 @@
             </includes>
         </fileSet>
         <fileSet>
-            <directory>${project.basedir}/../../external/storm-kafka-new-consumer-api/target</directory>
-            <outputDirectory>external/storm-kafka-new-consumer-api</outputDirectory>
+            <directory>${project.basedir}/../../external/storm-kafka-client/target</directory>
+            <outputDirectory>external/storm-kafka-client</outputDirectory>
             <includes>
                 <include>storm*jar</include>
             </includes>
         </fileSet>
         <fileSet>
-            <directory>${project.basedir}/../../external/storm-kafka-new-consumer-api</directory>
-            <outputDirectory>external/storm-kafka-new-consumer-api</outputDirectory>
+            <directory>${project.basedir}/../../external/storm-kafka-client</directory>
+            <outputDirectory>external/storm-kafka-client</outputDirectory>
             <includes>
                 <include>README.*</include>
             </includes>

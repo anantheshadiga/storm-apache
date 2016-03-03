@@ -283,7 +283,7 @@
         <module>external/storm-mqtt</module>
         <module>examples/storm-starter</module>
         <module>storm-clojure</module>
-        <module>external/storm-kafka-new-consumer-api</module>
+        <module>external/storm-kafka-client</module>
     </modules>
 
     <dependencies>
