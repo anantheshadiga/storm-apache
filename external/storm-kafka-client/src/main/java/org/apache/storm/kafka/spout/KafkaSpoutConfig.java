@@ -21,7 +21,7 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.io.Serializable;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -66,9 +66,9 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     private final Map<String, Object> kafkaProps;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
-    private final List<String> topics;
     private final FirstPollOffsetStrategy firstPollOffsetStrategy;
     private final long pollTimeoutMs;
+    private final KafkaSpoutStreams kafkaStreams;
 
     // Kafka spout configuration
     private long offsetCommitPeriodMs;
@@ -80,9 +80,9 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         this.valueDeserializer = builder.valueDeserializer;
         this.pollTimeoutMs = builder.pollTimeoutMs;
         this.offsetCommitPeriodMs = builder.offsetCommitPeriodMs;
-        this.topics = builder.topics;
         this.maxRetries = builder.maxRetries;
         this.firstPollOffsetStrategy = builder.firstPollOffsetStrategy;
+        this.kafkaStreams = builder.kafkaStreams;
     }
 
     private Map<String, Object> getKafkaProps(Map<String, Object> kafkaProps) {
@@ -98,26 +98,25 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         private long pollTimeoutMs = DEFAULT_POLL_TIMEOUT_MS;
         private long offsetCommitPeriodMs = DEFAULT_OFFSET_COMMIT_PERIOD_MS;
         private int maxRetries = DEFAULT_MAX_RETRIES;
-        private List<String> topics;
         private FirstPollOffsetStrategy firstPollOffsetStrategy = FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
+        private KafkaSpoutStreams kafkaStreams;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
          * The optional configuration can be specified using the set methods of this builder
          * @param kafkaProps    properties defining consumer connection to Kafka broker as specified in @see <a href="http://kafka.apache.org/090/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html">KafkaConsumer</a>
-         * @param topics    List of topics subscribing the consumer group
+         * @param kafkaStreams    streams to where the tuples are emitted for each tuple. Multiple topics can emit in the same stream.
          */
-        public Builder(Map<String, Object> kafkaProps, List<String> topics) {
+        public Builder(Map<String, Object> kafkaProps, KafkaSpoutStreams kafkaStreams) {
             if (kafkaProps == null || kafkaProps.isEmpty()) {
                 throw new IllegalArgumentException("Properties defining consumer connection to Kafka broker are required. " + kafkaProps);
             }
 
-            if (topics == null || topics.isEmpty())  {
-                throw new IllegalArgumentException("List of topics subscribing the consumer group is required. " + topics);
+            if (kafkaStreams == null)  {
+                throw new IllegalArgumentException("Must specify stream associated with each topic. Multiple topics can emit in the same stream.");
             }
-
             this.kafkaProps = kafkaProps;
-            this.topics = topics;
+            this.kafkaStreams = kafkaStreams;
         }
 
         /**
@@ -204,7 +203,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
 
     public boolean isConsumerAutoCommitMode() {
         return kafkaProps.get(Consumer.ENABLE_AUTO_COMMIT) == null     // default is true
-                || ((String)kafkaProps.get(Consumer.ENABLE_AUTO_COMMIT)).equalsIgnoreCase("true");
+                || Boolean.valueOf((String)kafkaProps.get(Consumer.ENABLE_AUTO_COMMIT));
     }
 
     public String getConsumerGroupId() {
@@ -212,7 +211,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     }
 
     public List<String> getSubscribedTopics() {
-        return Collections.unmodifiableList(topics);
+        return new ArrayList<>(kafkaStreams.getTopics());
     }
 
     public int getMaxTupleRetries() {
@@ -229,7 +228,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
                 "kafkaProps=" + kafkaProps +
                 ", keyDeserializer=" + keyDeserializer +
                 ", valueDeserializer=" + valueDeserializer +
-                ", topics=" + topics +
+                ", topics=" + getSubscribedTopics() +
                 ", firstPollOffsetStrategy=" + firstPollOffsetStrategy +
                 ", pollTimeoutMs=" + pollTimeoutMs +
                 ", offsetCommitPeriodMs=" + offsetCommitPeriodMs +

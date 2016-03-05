@@ -126,7 +126,10 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         }
 
         private void initialize(Collection<TopicPartition> partitions) {
-            acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
+            if(!consumerAutoCommitMode) {
+                acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
+            }
+
             for (TopicPartition tp : partitions) {
                 final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
                 final long fetchOffset = doSeek(tp, committedOffset);
@@ -201,7 +204,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());
 
             for (final ConsumerRecord<K, V> record : records) {
-                if (record.offset() == 0 || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
+                if (record.offset() == 0 || consumerAutoCommitMode || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
                     final List<Object> tuple = tupleBuilder.buildTuple(record);
                     final MessageId messageId = new MessageId(record, tuple);
 

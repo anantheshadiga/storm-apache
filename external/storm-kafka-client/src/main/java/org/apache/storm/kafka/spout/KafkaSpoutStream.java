@@ -29,17 +29,12 @@ public class KafkaSpoutStream implements Serializable {
     private final String streamId;
     private final String topic;
 
-    /** Declare specified outputFields with default stream and default topic */
-    public KafkaSpoutStream(Fields outputFields) {
-        this(outputFields, Utils.DEFAULT_STREAM_ID);
+    /** Declare specified outputFields with default stream for the specified topic */
+    public KafkaSpoutStream(Fields outputFields, String topic) {
+        this(outputFields, Utils.DEFAULT_STREAM_ID, topic);
     }
 
-    /** Declare specified outputFields with specified stream and default topic */
-    public KafkaSpoutStream(Fields outputFields, String streamId) {
-        this(outputFields, streamId, DEFAULT_TOPIC);
-    }
-
-    /** Declare specified outputFields with specified stream and specified topic */
+    /** Declare specified outputFields with specified stream for the specified topic */
     public KafkaSpoutStream(Fields outputFields, String streamId, String topic) {
         this.outputFields = outputFields;
         this.streamId = streamId;

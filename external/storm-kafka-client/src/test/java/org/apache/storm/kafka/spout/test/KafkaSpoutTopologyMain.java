@@ -25,7 +25,6 @@ import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.spout.KafkaRecordTupleBuilder;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
-import org.apache.storm.kafka.spout.KafkaSpoutStream;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
 import org.apache.storm.kafka.spout.KafkaTupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
@@ -34,9 +33,7 @@ import org.apache.storm.tuple.Fields;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST;
@@ -79,18 +76,21 @@ public class KafkaSpoutTopologyMain {
 
     public static StormTopology getTopolgyKafkaSpout() {
         TopologyBuilder tp = new TopologyBuilder();
-        tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(), getKafkaOutputStream(), getTupleBuilder()), 1);
+        tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(), getKafkaSpoutStreams(), getTupleBuilder()), 1);
         tp.setBolt("kafka_bolt", new KafkaTestBolt()).shuffleGrouping("kafka_spout");
         return tp.createTopology();
     }
 
     public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig() {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(),
-                getTopics()).setOffsetCommitPeriodMs(10_000).setFirstPollOffsetStrategy(EARLIEST).build();
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), getKafkaSpoutStreams())
+                .setOffsetCommitPeriodMs(10_000)
+                .setFirstPollOffsetStrategy(EARLIEST)
+                .build();
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {
         Map<String, Object> props = new HashMap<>();
+        props.put(KafkaSpoutConfig.Consumer.ENABLE_AUTO_COMMIT, "true");
         props.put(KafkaSpoutConfig.Consumer.BOOTSTRAP_SERVERS, "127.0.0.1:9092");
         props.put(KafkaSpoutConfig.Consumer.GROUP_ID, "kafkaSpoutTestGroup");
         props.put(KafkaSpoutConfig.Consumer.KEY_DESERIALIZER, "org.apache.kafka.common.serialization.StringDeserializer");
@@ -98,15 +98,15 @@ public class KafkaSpoutTopologyMain {
         return props;
     }
 
-    public static List<String> getTopics() {
-        return new ArrayList<String>(){{add("test");}};
+    public static String[] getTopics() {
+        return new String[]{"test"};
     }
 
     public static KafkaTupleBuilder<String,String> getTupleBuilder() {
         return new KafkaRecordTupleBuilder<>();
     }
 
-    public static KafkaSpoutStreams getKafkaOutputStream() {
-        return new KafkaSpoutStreams(new KafkaSpoutStream(new Fields("topic", "partition", "offset", "key", "value")));
+    public static KafkaSpoutStreams getKafkaSpoutStreams() {
+        return new KafkaSpoutStreams.Builder(new Fields("topic", "partition", "offset", "key", "value"), getTopics()).build();
     }
 }

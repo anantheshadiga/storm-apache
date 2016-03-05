@@ -21,25 +21,25 @@ package org.apache.storm.kafka.spout;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.tuple.Fields;
+import org.apache.storm.utils.Utils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class KafkaSpoutStreams implements Serializable {
     private final Map<String, KafkaSpoutStream> topicToStream;
 
-    public KafkaSpoutStreams(KafkaSpoutStream... kafkaSpoutStreams) {
-        if (kafkaSpoutStreams == null || kafkaSpoutStreams.length == 0) {
-            throw new IllegalArgumentException("Must specify at least one output stream");
-        }
-
-        topicToStream = new HashMap<>();
-        for (KafkaSpoutStream stream : kafkaSpoutStreams) {
-            topicToStream.put(stream.getTopic(), stream);
-        }
+    private KafkaSpoutStreams(Builder builder) {
+        this.topicToStream = builder.topicToStream;
     }
 
+    /**
+     * @param topic the topic for which to get output fields
+     * @return the output fields declared
+     */
     public Fields getOutputFields(String topic) {
         if (topicToStream.containsKey(topic)) {
             return topicToStream.get(topic).getOutputFields();
@@ -47,11 +47,22 @@ public class KafkaSpoutStreams implements Serializable {
         return topicToStream.get(KafkaSpoutStream.DEFAULT_TOPIC).getOutputFields();
     }
 
+    /**
+     * @param topic the topic to for which to get the stream id
+     * @return the id of the stream to where the tuples are emitted
+     */
     public String getStreamId(String topic) {
         if (topicToStream.containsKey(topic)) {
             return topicToStream.get(topic).getStreamId();
         }
         return topicToStream.get(KafkaSpoutStream.DEFAULT_TOPIC).getStreamId();
+    }
+
+    /**
+     * @return list of topics subscribed and emitting tuples to a stream as configured by {@link KafkaSpoutStream}
+     */
+    public List<String> getTopics() {
+        return new ArrayList<>(topicToStream.keySet());
     }
 
     void declareOutputFields(OutputFieldsDeclarer declarer) {
@@ -62,5 +73,46 @@ public class KafkaSpoutStreams implements Serializable {
 
     void emit(SpoutOutputCollector collector, MessageId messageId) {
         collector.emit(getStreamId(messageId.topic()), messageId.getTuple(), messageId);
+    }
+
+    public static class Builder {
+        private Map<String, KafkaSpoutStream> topicToStream = new HashMap<>();;
+
+        public Builder(Fields outputFields, String... topics) {
+            this(outputFields, Utils.DEFAULT_STREAM_ID, topics);
+        }
+
+        public Builder (Fields outputFields, String streamId, String... topics) {
+            for (String topic : topics) {
+                topicToStream.put(topic, new KafkaSpoutStream(outputFields, streamId, topic));
+            }
+        }
+
+        public Builder(KafkaSpoutStream stream) {
+            topicToStream.put(stream.getTopic(), stream);
+        }
+
+        public Builder addStream(KafkaSpoutStream stream) {
+            topicToStream.put(stream.getTopic(), stream);
+            return this;
+        }
+
+        public Builder addStream(Fields outputFields, String... topics) {
+            for (String topic : topics) {
+                topicToStream.put(topic, new KafkaSpoutStream(outputFields, topic));
+            }
+            return this;
+        }
+
+        public Builder addStream(Fields outputFields, String streamId, String... topics) {
+            for (String topic : topics) {
+                topicToStream.put(topic, new KafkaSpoutStream(outputFields, streamId, topic));
+            }
+            return this;
+        }
+
+        public KafkaSpoutStreams build() {
+            return new KafkaSpoutStreams(this);
+        }
     }
 }
