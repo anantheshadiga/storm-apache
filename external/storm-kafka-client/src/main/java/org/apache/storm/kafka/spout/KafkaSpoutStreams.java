@@ -75,7 +75,7 @@ public class KafkaSpoutStreams implements Serializable {
         }
     }
 
-    void emit(SpoutOutputCollector collector, MessageId messageId) {
+    void emit(SpoutOutputCollector collector, KafkaSpoutMessageId messageId) {
         collector.emit(getStreamId(messageId.topic()), messageId.getTuple(), messageId);
     }
 

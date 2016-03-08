@@ -22,7 +22,7 @@ import org.apache.storm.tuple.Values;
 
 import java.util.List;
 
-public class KafkaRecordTupleBuilder<K,V> implements org.apache.storm.kafka.spout.KafkaTupleBuilder<K, V> {
+public class KafkaRecordTupleBuilder<K,V> implements KafkaTupleBuilder<K, V> {
     @Override
     public List<Object> buildTuple(final ConsumerRecord<K, V> consumerRecord) {
         return new Values(consumerRecord.topic(),

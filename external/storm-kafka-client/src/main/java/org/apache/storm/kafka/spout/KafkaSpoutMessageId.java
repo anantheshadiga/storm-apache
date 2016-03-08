@@ -24,17 +24,17 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collections;
 import java.util.List;
 
-public class MessageId {
+public class KafkaSpoutMessageId {
     private TopicPartition topicPart;
     private long offset;
     private List<Object> tuple;
     private int numFails = 0;
 
-    public MessageId(ConsumerRecord consumerRecord, List<Object> tuple) {
+    public KafkaSpoutMessageId(ConsumerRecord consumerRecord, List<Object> tuple) {
         this(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()), consumerRecord.offset(), tuple);
     }
 
-    public MessageId(TopicPartition topicPart, long offset, List<Object> tuple) {
+    public KafkaSpoutMessageId(TopicPartition topicPart, long offset, List<Object> tuple) {
         this.topicPart = topicPart;
         this.offset = offset;
         this.tuple = tuple;
@@ -95,7 +95,7 @@ public class MessageId {
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        MessageId messageId = (MessageId) o;
+        KafkaSpoutMessageId messageId = (KafkaSpoutMessageId) o;
         if (offset != messageId.offset) {
             return false;
         }
