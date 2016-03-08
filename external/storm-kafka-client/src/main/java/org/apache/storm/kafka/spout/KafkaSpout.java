@@ -62,7 +62,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // Bookkeeping
     private KafkaSpoutStreams kafkaSpoutStreams;
-    private KafkaTupleBuilder<K, V> tupleBuilder;
+    private KafkaSpoutTupleBuilder<K, V> tupleBuilder;
     private transient Timer timer;                                    // timer == null for auto commit mode
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the timer expires, on consumer rebalance, or on close/deactivate
     private transient int maxRetries;                                 // Max number of times a tuple is retried
@@ -70,7 +70,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                                                     // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
 
 
-    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaTupleBuilder<K, V> tupleBuilder) {
+    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tupleBuilder) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
         this.tupleBuilder = tupleBuilder;

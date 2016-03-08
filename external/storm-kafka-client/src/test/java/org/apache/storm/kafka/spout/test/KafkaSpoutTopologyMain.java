@@ -26,7 +26,7 @@ import org.apache.storm.kafka.spout.KafkaRecordTupleBuilder;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
-import org.apache.storm.kafka.spout.KafkaTupleBuilder;
+import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Fields;
 
@@ -102,7 +102,7 @@ public class KafkaSpoutTopologyMain {
         return new String[]{"test"};
     }
 
-    public static KafkaTupleBuilder<String,String> getTupleBuilder() {
+    public static KafkaSpoutTupleBuilder<String,String> getTupleBuilder() {
         return new KafkaRecordTupleBuilder<>();
     }
 
