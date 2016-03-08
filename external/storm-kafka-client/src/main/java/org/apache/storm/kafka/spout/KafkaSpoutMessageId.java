@@ -25,10 +25,10 @@ import java.util.Collections;
 import java.util.List;
 
 public class KafkaSpoutMessageId {
-    private TopicPartition topicPart;
-    private long offset;
-    private List<Object> tuple;
-    private int numFails = 0;
+    private transient TopicPartition topicPart;
+    private transient long offset;
+    private transient List<Object> tuple;
+    private transient int numFails = 0;
 
     public KafkaSpoutMessageId(ConsumerRecord consumerRecord, List<Object> tuple) {
         this(new TopicPartition(consumerRecord.topic(), consumerRecord.partition()), consumerRecord.offset(), tuple);

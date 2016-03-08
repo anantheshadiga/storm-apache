@@ -92,7 +92,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             timer = new Timer(500, kafkaSpoutConfig.getOffsetsCommitFreqMs(), TimeUnit.MILLISECONDS);
             acked = new HashMap<>();
         }
-        LOG.debug("Kafka Spout opened with the following configuration: {}", kafkaSpoutConfig);
+        LOG.info("Kafka Spout opened with the following configuration: {}", kafkaSpoutConfig);
     }
 
     // =========== Consumer Rebalance Listener - On the same thread as the caller ===========
@@ -227,7 +227,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                 offsetEntry.commit(nextCommitOffsets.get(tpOffset.getKey()));
             }
         } else {
-            LOG.trace("No offsets to commit. {}", toString());
+            LOG.trace("No offsets to commit. {}", this);
         }
     }
 
@@ -345,12 +345,12 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                         found = true;
                         nextCommitMsg = currAckedMsg;
                         nextCommitOffset = currOffset;
-                        LOG.trace("Found offset to commit [{}]. {}", currOffset, toString());
+                        LOG.trace("Found offset to commit [{}]. {}", currOffset, this);
                     } else if (currAckedMsg.offset() > nextCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
-                        LOG.debug("Non continuous offset found [{}]. It will be processed in a subsequent batch. {}", currOffset, toString());
+                        LOG.debug("Non continuous offset found [{}]. It will be processed in a subsequent batch. {}", currOffset, this);
                         break;
                     } else {
-                        LOG.debug("Unexpected offset found [{}]. {}", currOffset, toString());
+                        LOG.debug("Unexpected offset found [{}]. {}", currOffset, this);
                         break;
                     }
                 }
@@ -359,9 +359,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             OffsetAndMetadata nextCommitOffsetAndMetadata = null;
             if (found) {
                 nextCommitOffsetAndMetadata = new OffsetAndMetadata(nextCommitOffset, nextCommitMsg.getMetadata(Thread.currentThread()));
-                LOG.trace("Offset to be committed next: [{}] {}", nextCommitOffsetAndMetadata.offset(), toString());
+                LOG.trace("Offset to be committed next: [{}] {}", nextCommitOffsetAndMetadata.offset(), this);
             } else {
-                LOG.debug("No offsets ready to commit", toString());
+                LOG.debug("No offsets ready to commit", this);
             }
             return nextCommitOffsetAndMetadata;
         }
@@ -383,7 +383,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                     }
                 }
             }
-            LOG.trace("Object state after update: {}", toString());
+            LOG.trace("Object state after update: {}", this);
         }
 
         public boolean isEmpty() {
