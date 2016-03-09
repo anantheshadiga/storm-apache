@@ -75,14 +75,17 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static StormTopology getTopolgyKafkaSpout() {
-        TopologyBuilder tp = new TopologyBuilder();
-        tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(), getTupleBuilder()), 1);
-        tp.setBolt("kafka_bolt", new KafkaTestBolt()).shuffleGrouping("kafka_spout");
+        final KafkaSpoutStreams kafkaSpoutStreams = getKafkaSpoutStreams();
+        final String[] topics = getTopics();
+        final TopologyBuilder tp = new TopologyBuilder();
+        tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(kafkaSpoutStreams), getTupleBuilder()), 1);
+        tp.setBolt("kafka_bolt", new KafkaTestBolt()).shuffleGrouping("kafka_spout", kafkaSpoutStreams.getStreamId(topics[0]));
+        tp.setBolt("kafka_bolt_1", new KafkaTestBolt()).shuffleGrouping("kafka_spout", kafkaSpoutStreams.getStreamId(topics[1]));
         return tp.createTopology();
     }
 
-    public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig() {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), getKafkaSpoutStreams())
+    public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams)
                 .setOffsetCommitPeriodMs(10_000)
                 .setFirstPollOffsetStrategy(EARLIEST)
                 .build();
@@ -99,7 +102,7 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static String[] getTopics() {
-        return new String[]{"test"};
+        return new String[]{"test","test1"};
     }
 
     public static KafkaSpoutTupleBuilder<String,String> getTupleBuilder() {
@@ -107,6 +110,10 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static KafkaSpoutStreams getKafkaSpoutStreams() {
-        return new KafkaSpoutStreams.Builder(new Fields("topic", "partition", "offset", "key", "value"), getTopics()).build();
+        final String[] topics = getTopics();
+        final Fields outputFields = new Fields("topic", "partition", "offset", "key", "value");
+        return new KafkaSpoutStreams.Builder(outputFields, topics[0] + "_stream", new String[]{topics[0]})
+                .addStream(outputFields, topics[1] + "_stream", new String[]{topics[1]})
+                .build();
     }
 }
