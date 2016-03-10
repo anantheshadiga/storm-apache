@@ -80,7 +80,7 @@ public class KafkaSpoutTopologyMain {
         final TopologyBuilder tp = new TopologyBuilder();
         tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(kafkaSpoutStreams), getTupleBuilder()), 1);
         tp.setBolt("kafka_bolt", new KafkaTestBolt()).shuffleGrouping("kafka_spout", kafkaSpoutStreams.getStreamId(topics[0]));
-        tp.setBolt("kafka_bolt_1", new KafkaTestBolt()).shuffleGrouping("kafka_spout", kafkaSpoutStreams.getStreamId(topics[1]));
+        tp.setBolt("kafka_bolt_1", new KafkaTestBolt()).shuffleGrouping("kafka_spout", kafkaSpoutStreams.getStreamId(topics[2]));
         return tp.createTopology();
     }
 
@@ -102,7 +102,11 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static String[] getTopics() {
-        return new String[]{"test","test1"};
+        return new String[]{"test","test1","test2"};
+    }
+
+    public static String[] getStreams() {
+        return new String[]{"test_stream","test1_stream","test2_stream"};
     }
 
     public static KafkaSpoutTupleBuilder<String,String> getTupleBuilder() {
@@ -111,9 +115,11 @@ public class KafkaSpoutTopologyMain {
 
     public static KafkaSpoutStreams getKafkaSpoutStreams() {
         final String[] topics = getTopics();
+        final String[] streams = getStreams();
         final Fields outputFields = new Fields("topic", "partition", "offset", "key", "value");
-        return new KafkaSpoutStreams.Builder(outputFields, topics[0] + "_stream", new String[]{topics[0]})
-                .addStream(outputFields, topics[1] + "_stream", new String[]{topics[1]})
+//        return new KafkaSpoutStreams.Builder(outputFields, streams[0], new String[]{topics[0]})
+        return new KafkaSpoutStreams.Builder(outputFields, streams[0], topics)
+                .addStream(outputFields, streams[2], new String[]{topics[2]})
                 .build();
     }
 }

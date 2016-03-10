@@ -20,6 +20,7 @@ package org.apache.storm.kafka.spout;
 
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.topology.OutputFieldsGetter;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.Utils;
 
@@ -71,7 +72,9 @@ public class KafkaSpoutStreams implements Serializable {
 
     void declareOutputFields(OutputFieldsDeclarer declarer) {
         for (KafkaSpoutStream stream : topicToStream.values()) {
-            declarer.declareStream(stream.getStreamId(), stream.getOutputFields());
+            if (!((OutputFieldsGetter)declarer).getFieldsDeclaration().containsKey(stream.getStreamId())) {
+                declarer.declareStream(stream.getStreamId(), stream.getOutputFields());
+            }
         }
     }
 
