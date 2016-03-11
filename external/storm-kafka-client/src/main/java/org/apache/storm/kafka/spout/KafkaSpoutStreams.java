@@ -23,6 +23,8 @@ import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.OutputFieldsGetter;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -35,10 +37,13 @@ import java.util.Map;
  * declare output streams and emmit tuples, on the appropriate stream, for all the topics specified.
  */
 public class KafkaSpoutStreams implements Serializable {
+    protected static final Logger LOG = LoggerFactory.getLogger(KafkaSpoutStreams.class);
+
     private final Map<String, KafkaSpoutStream> topicToStream;
 
     private KafkaSpoutStreams(Builder builder) {
         this.topicToStream = builder.topicToStream;
+        LOG.debug("Built {}", this);
     }
 
     /**
@@ -47,7 +52,9 @@ public class KafkaSpoutStreams implements Serializable {
      */
     public Fields getOutputFields(String topic) {
         if (topicToStream.containsKey(topic)) {
-            return topicToStream.get(topic).getOutputFields();
+            final Fields outputFields = topicToStream.get(topic).getOutputFields();
+            LOG.debug("Topic [{}] has output fields [{}]", topic, outputFields);
+            return outputFields;
         }
         throw new IllegalStateException(this.getClass().getName() + " not configured for topic: " + topic);
     }
@@ -58,7 +65,9 @@ public class KafkaSpoutStreams implements Serializable {
      */
     public String getStreamId(String topic) {
         if (topicToStream.containsKey(topic)) {
-            return topicToStream.get(topic).getStreamId();
+            final String streamId = topicToStream.get(topic).getStreamId();
+            LOG.debug("Topic [{}] emitting in stream [{}]", topic, streamId);
+            return streamId;
         }
         throw new IllegalStateException(this.getClass().getName() + " not configured for topic: " + topic);
     }
@@ -74,12 +83,20 @@ public class KafkaSpoutStreams implements Serializable {
         for (KafkaSpoutStream stream : topicToStream.values()) {
             if (!((OutputFieldsGetter)declarer).getFieldsDeclaration().containsKey(stream.getStreamId())) {
                 declarer.declareStream(stream.getStreamId(), stream.getOutputFields());
+                LOG.debug("Declared " + stream);
             }
         }
     }
 
     void emit(SpoutOutputCollector collector, KafkaSpoutMessageId messageId) {
         collector.emit(getStreamId(messageId.topic()), messageId.getTuple(), messageId);
+    }
+
+    @Override
+    public String toString() {
+        return "KafkaSpoutStreams{" +
+                "topicToStream=" + topicToStream +
+                '}';
     }
 
     public static class Builder {
