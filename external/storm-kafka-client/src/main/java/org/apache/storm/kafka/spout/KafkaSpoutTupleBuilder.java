@@ -24,5 +24,5 @@ import java.io.Serializable;
 import java.util.List;
 
 public interface KafkaSpoutTupleBuilder<K,V> extends Serializable {
-    List<Object> buildTuple(ConsumerRecord<K, V> consumerRecord);
+    List<Object> buildTuple(ConsumerRecord<K, V> consumerRecord, KafkaSpoutStreams kafkaSpoutStreams);
 }

@@ -196,7 +196,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
             for (final ConsumerRecord<K, V> record : records) {
                 if (record.offset() == 0 || consumerAutoCommitMode || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
-                    final List<Object> tuple = tupleBuilder.buildTuple(record);
+                    final List<Object> tuple = tupleBuilder.buildTuple(record, kafkaSpoutStreams);
                     final KafkaSpoutMessageId messageId = new KafkaSpoutMessageId(record, tuple);
 
                     kafkaSpoutStreams.emit(collector, messageId);           // emits one tuple per record
@@ -232,6 +232,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     }
 
     // ======== Ack =======
+
     @Override
     public void ack(Object messageId) {
         if (!consumerAutoCommitMode) {  // Only need to keep track of acked tuples if commits are not done automatically

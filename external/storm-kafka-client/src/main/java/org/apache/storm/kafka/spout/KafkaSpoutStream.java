@@ -54,4 +54,13 @@ public class KafkaSpoutStream implements Serializable {
     public String getTopic() {
         return topic;
     }
+
+    @Override
+    public String toString() {
+        return "KafkaSpoutStream{" +
+                "outputFields=" + outputFields +
+                ", streamId='" + streamId + '\'' +
+                ", topic='" + topic + '\'' +
+                '}';
+    }
 }
