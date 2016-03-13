@@ -56,7 +56,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // Kafka
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
-    private KafkaConsumer<K, V> kafkaConsumer;
+    private transient KafkaConsumer<K, V> kafkaConsumer;
     private transient boolean consumerAutoCommitMode;
     private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
 
@@ -68,6 +68,8 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     private transient int maxRetries;                                 // Max number of times a tuple is retried
     private transient boolean initialized;          // Flag indicating that the spout is still undergoing initialization process.
                                                     // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
+    private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
+
 
 
     public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tupleBuilder) {
@@ -83,6 +85,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         // Spout internals
         this.collector = collector;
         maxRetries = kafkaSpoutConfig.getMaxTupleRetries();
+        numUncommittedOffsets = 0;
 
         // Offset management
         firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
@@ -176,7 +179,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                 emitTuples(poll());
             } else {
                 LOG.debug("Reached the max number [{}] of polled records that are pending commit [{}]. " +
-                        "No more polls will occur until the next successful commit.", kafkaSpoutConfig.getMaxUncommittedRecords(), acked.size());
+                        "No more polls will occur until the next successful commit.", kafkaSpoutConfig.getMaxUncommittedOffsets(), acked.size());
             }
         } else {
             LOG.debug("Spout not initialized. Not sending tuples until initialization completes");
@@ -184,7 +187,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     }
 
     private boolean isMaxUncommitted() {
-        return acked.size() >= kafkaSpoutConfig.getMaxUncommittedRecords();
+        return acked.size() >= kafkaSpoutConfig.getMaxUncommittedOffsets();
     }
 
     private boolean commit() {
@@ -193,7 +196,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     private ConsumerRecords<K, V> poll() {
         final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
-        LOG.debug("Polled [{}] records from Kafka", consumerRecords.count());
+        final int numPolledRecords = consumerRecords.count();
+        numUncommittedOffsets += numPolledRecords;
+        LOG.debug("Polled [{}] records from Kafka", numPolledRecords);
         return consumerRecords;
     }
 
@@ -382,6 +387,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
          */
         public void commit(OffsetAndMetadata committedOffset) {
             if (committedOffset != null) {
+                long numCommittedOffsets = committedOffset.offset() - this.committedOffset;
                 this.committedOffset = committedOffset.offset();
                 for (Iterator<KafkaSpoutMessageId> iterator = ackedMsgs.iterator(); iterator.hasNext(); ) {
                     if (iterator.next().offset() <= committedOffset.offset()) {
@@ -390,8 +396,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                         break;
                     }
                 }
+                numUncommittedOffsets -= numCommittedOffsets;
             }
-            LOG.trace("Object state after update: {}", this);
+            LOG.trace("Object state after update: {}, numUncommittedOffsets [{}]", this, numUncommittedOffsets);
         }
 
         public boolean isEmpty() {

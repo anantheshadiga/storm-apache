@@ -32,7 +32,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     public static final long DEFAULT_POLL_TIMEOUT_MS = 2_000;            // 2s
     public static final long DEFAULT_OFFSET_COMMIT_PERIOD_MS = 15_000;   // 15s
     public static final int DEFAULT_MAX_RETRIES = Integer.MAX_VALUE;     // Retry forever
-    public static final int DEFAULT_MAX_UNCOMMITTED_RECORDS = 10_000;    // 10,000 records
+    public static final int DEFAULT_MAX_UNCOMMITTED_OFFSETS = 10_000;    // 10,000 records
 
     // Kafka property names
     public interface Consumer {
@@ -74,7 +74,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     // Kafka spout configuration
     private final long offsetCommitPeriodMs;
     private final int maxRetries;
-    private final int maxUncommittedRecords;
+    private final int maxUncommittedOffsets;
 
     private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = setDefaultsAndGetKafkaProps(builder.kafkaProps);
@@ -85,7 +85,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         this.maxRetries = builder.maxRetries;
         this.firstPollOffsetStrategy = builder.firstPollOffsetStrategy;
         this.kafkaSpoutStreams = builder.kafkaSpoutStreams;
-        this.maxUncommittedRecords = builder.maxUncommittedRecords;
+        this.maxUncommittedOffsets = builder.maxUncommittedOffsets;
     }
 
     private Map<String, Object> setDefaultsAndGetKafkaProps(Map<String, Object> kafkaProps) {
@@ -105,7 +105,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         private int maxRetries = DEFAULT_MAX_RETRIES;
         private FirstPollOffsetStrategy firstPollOffsetStrategy = FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
         private KafkaSpoutStreams kafkaSpoutStreams;
-        private int maxUncommittedRecords = DEFAULT_MAX_UNCOMMITTED_RECORDS;
+        private int maxUncommittedOffsets = DEFAULT_MAX_UNCOMMITTED_OFFSETS;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -173,12 +173,12 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         }
 
         /**
-         * Defines the max number of records polled that have been acked and are pending commit before another poll can take place.
-         * Once this limit is reached no more records can be polled until the next successful commit. The default is 10000.
-         * @param maxUncommittedRecords max number of records that can be be pending commit
+         * Defines the max number of offsets (records) polled, that are pending commit, before another poll can take place.
+         * Once this limit is reached no more offsets (records) can be polled until the next successful commit. The default is 10000.
+         * @param maxUncommittedOffsets max number of records that can be be pending commit
          */
-        public Builder<K,V> setMaxUncommittedRecords(int maxUncommittedRecords) {
-            this.maxUncommittedRecords = maxUncommittedRecords;
+        public Builder<K,V> setMaxUncommittedOffsets(int maxUncommittedOffsets) {
+            this.maxUncommittedOffsets = maxUncommittedOffsets;
             return this;
         }
 
@@ -242,8 +242,8 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         return kafkaSpoutStreams;
     }
 
-    public int getMaxUncommittedRecords() {
-        return maxUncommittedRecords;
+    public int getMaxUncommittedOffsets() {
+        return maxUncommittedOffsets;
     }
 
     @Override
