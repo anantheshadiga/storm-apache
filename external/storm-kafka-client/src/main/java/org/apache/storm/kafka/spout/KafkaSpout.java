@@ -172,12 +172,19 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         if (initialized) {
             if (commit()) {
                 commitOffsetsForAckedTuples();
-            } else {
+            } else if (!isMaxUncommitted()) {
                 emitTuples(poll());
+            } else {
+                LOG.debug("Reached the max number [{}] of polled records that are pending commit [{}]. " +
+                        "No more polls will occur until the next successful commit.", kafkaSpoutConfig.getMaxUncommittedRecords(), acked.size());
             }
         } else {
             LOG.debug("Spout not initialized. Not sending tuples until initialization completes");
         }
+    }
+
+    private boolean isMaxUncommitted() {
+        return acked.size() >= kafkaSpoutConfig.getMaxUncommittedRecords();
     }
 
     private boolean commit() {
