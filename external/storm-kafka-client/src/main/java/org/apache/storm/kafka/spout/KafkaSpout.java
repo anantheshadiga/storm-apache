@@ -146,8 +146,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                     kafkaConsumer.seekToEnd(tp);
                     fetchOffset = kafkaConsumer.position(tp);
                 } else {
-                    // do nothing - by default polling starts at the last committed offset
-                    fetchOffset = committedOffset.offset();
+                    // By default polling starts at the last committed offset. +1 to fetch the first uncommitted offset.
+                    fetchOffset = committedOffset.offset() + 1;
+                    kafkaConsumer.seek(tp, fetchOffset);
                 }
             } else {    // no commits have ever been done, so start at the beginning or end depending on the strategy
                 if (firstPollOffsetStrategy.equals(EARLIEST) || firstPollOffsetStrategy.equals(UNCOMMITTED_EARLIEST)) {
@@ -207,13 +208,13 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());
 
             for (final ConsumerRecord<K, V> record : records) {
-                if (record.offset() == 0 || consumerAutoCommitMode || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
+//                if (record.offset() == 0 || consumerAutoCommitMode || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
                     final List<Object> tuple = tupleBuilder.buildTuple(record, kafkaSpoutStreams);
                     final KafkaSpoutMessageId messageId = new KafkaSpoutMessageId(record, tuple);
 
                     kafkaSpoutStreams.emit(collector, messageId);           // emits one tuple per record
                     LOG.debug("Emitted tuple [{}] for record [{}]", tuple, record);
-                }
+//                }
             }
         }
     }
@@ -251,6 +252,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
             acked.get(msgId.getTopicPartition()).add(msgId);
             LOG.debug("Added acked message [{}] to list of messages to be committed to Kafka", msgId);
+            LOG.trace("Messages acked and pending commit [{}]", acked);
         }
     }
 
@@ -330,13 +332,15 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
      */
     private class OffsetEntry {
         private final TopicPartition tp;
-        private long committedOffset;               // last offset committed to Kafka, or initial fetching offset (initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener)
+        private long fetchOffset;                   // Initial offset fetched (initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener)
+        private long committedOffset;               // last offset committed to Kafka. Initially it is set to fetchOffset
         private final NavigableSet<KafkaSpoutMessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // acked messages sorted by ascending order of offset
 
-        public OffsetEntry(TopicPartition tp, long committedOffset) {
+        public OffsetEntry(TopicPartition tp, long fetchOffset) {
             this.tp = tp;
-            this.committedOffset = committedOffset;
-            LOG.debug("Created OffsetEntry for [topic-partition={}, committed-or-initial-fetch-offset={}]", tp, committedOffset);
+            this.fetchOffset = fetchOffset;
+            this.committedOffset = fetchOffset;
+            LOG.debug("Created OffsetEntry for [topic-partition={}, committed-or-initial-fetch-offset={}]", tp, fetchOffset);
         }
 
         public void add(KafkaSpoutMessageId msgId) {          // O(Log N)
@@ -353,8 +357,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             KafkaSpoutMessageId nextCommitMsg = null;     // this is a convenience variable to make it faster to create OffsetAndMetadata
 
             for (KafkaSpoutMessageId currAckedMsg : ackedMsgs) {  // complexity is that of a linear scan on a TreeMap
-                if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {      // The first poll includes the last committed offset. This if avoids duplication
-                    if (currOffset == nextCommitOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
+//                if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {      // The first poll includes the last committed offset. This if avoids duplication
+//                    if (currOffset == nextCommitOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
+                    if ((currOffset = currAckedMsg.offset()) == fetchOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
                         found = true;
                         nextCommitMsg = currAckedMsg;
                         nextCommitOffset = currOffset;
@@ -366,7 +371,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                         LOG.debug("Unexpected offset found [{}]. {}", currOffset, this);
                         break;
                     }
-                }
+//                }
             }
 
             OffsetAndMetadata nextCommitOffsetAndMetadata = null;
@@ -387,7 +392,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
          */
         public void commit(OffsetAndMetadata committedOffset) {
             if (committedOffset != null) {
-                long numCommittedOffsets = committedOffset.offset() - this.committedOffset;
+                long numCommittedOffsets = committedOffset.offset() - this.committedOffset + 1;
                 this.committedOffset = committedOffset.offset();
                 for (Iterator<KafkaSpoutMessageId> iterator = ackedMsgs.iterator(); iterator.hasNext(); ) {
                     if (iterator.next().offset() <= committedOffset.offset()) {
