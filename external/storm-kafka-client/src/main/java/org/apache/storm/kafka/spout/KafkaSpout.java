@@ -67,9 +67,8 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the timer expires, on consumer rebalance, or on close/deactivate
     private transient int maxRetries;                                 // Max number of times a tuple is retried
     private transient boolean initialized;          // Flag indicating that the spout is still undergoing initialization process.
-                                                    // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
+    // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
     private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
-
 
 
     public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tupleBuilder) {
@@ -120,7 +119,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         }
 
         private void initialize(Collection<TopicPartition> partitions) {
-            if(!consumerAutoCommitMode) {
+            if (!consumerAutoCommitMode) {
                 acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
             }
 
@@ -208,13 +207,11 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());
 
             for (final ConsumerRecord<K, V> record : records) {
-//                if (record.offset() == 0 || consumerAutoCommitMode || record.offset() > acked.get(tp).committedOffset) {      // The first poll includes the last committed offset. This if avoids duplication
-                    final List<Object> tuple = tupleBuilder.buildTuple(record, kafkaSpoutStreams);
-                    final KafkaSpoutMessageId messageId = new KafkaSpoutMessageId(record, tuple);
+                final List<Object> tuple = tupleBuilder.buildTuple(record, kafkaSpoutStreams);
+                final KafkaSpoutMessageId messageId = new KafkaSpoutMessageId(record, tuple);
 
-                    kafkaSpoutStreams.emit(collector, messageId);           // emits one tuple per record
-                    LOG.debug("Emitted tuple [{}] for record [{}]", tuple, record);
-//                }
+                kafkaSpoutStreams.emit(collector, messageId);           // emits one tuple per record
+                LOG.debug("Emitted tuple [{}] for record [{}]", tuple, record);
             }
         }
     }
@@ -357,21 +354,18 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             KafkaSpoutMessageId nextCommitMsg = null;     // this is a convenience variable to make it faster to create OffsetAndMetadata
 
             for (KafkaSpoutMessageId currAckedMsg : ackedMsgs) {  // complexity is that of a linear scan on a TreeMap
-//                if ((currOffset = currAckedMsg.offset()) == 0 || currOffset != nextCommitOffset) {      // The first poll includes the last committed offset. This if avoids duplication
-//                    if (currOffset == nextCommitOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
-                    if ((currOffset = currAckedMsg.offset()) == fetchOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
-                        found = true;
-                        nextCommitMsg = currAckedMsg;
-                        nextCommitOffset = currOffset;
-                        LOG.trace("Found offset to commit [{}]. {}", currOffset, this);
-                    } else if (currAckedMsg.offset() > nextCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
-                        LOG.debug("Non continuous offset found [{}]. It will be processed in a subsequent batch. {}", currOffset, this);
-                        break;
-                    } else {
-                        LOG.debug("Unexpected offset found [{}]. {}", currOffset, this);
-                        break;
-                    }
-//                }
+                if ((currOffset = currAckedMsg.offset()) == fetchOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
+                    found = true;
+                    nextCommitMsg = currAckedMsg;
+                    nextCommitOffset = currOffset;
+                    LOG.trace("Found offset to commit [{}]. {}", currOffset, this);
+                } else if (currAckedMsg.offset() > nextCommitOffset + 1) {    // offset found is not continuous to the offsets listed to go in the next commit, so stop search
+                    LOG.debug("Non continuous offset found [{}]. It will be processed in a subsequent batch. {}", currOffset, this);
+                    break;
+                } else {
+                    LOG.debug("Unexpected offset found [{}]. {}", currOffset, this);
+                    break;
+                }
             }
 
             OffsetAndMetadata nextCommitOffsetAndMetadata = null;
@@ -430,14 +424,13 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         private long start;
 
         /**
-         * Creates a class that mimics a single threaded timer that expires periodically.
-         * If a call to {@link #isExpiredResetOnTrue()} occurs later than {@code period} since the timer was initiated or reset,
-         * this method returns true. Each time the method returns true the counter is reset.
-         * The timer starts with the specified time delay.
+         * Creates a class that mimics a single threaded timer that expires periodically. If a call to {@link
+         * #isExpiredResetOnTrue()} occurs later than {@code period} since the timer was initiated or reset, this method returns
+         * true. Each time the method returns true the counter is reset. The timer starts with the specified time delay.
          *
-         *  @param delay the initial delay before the timer starts
-         *  @param period the period between calls {@link #isExpiredResetOnTrue()}
-         *  @param timeUnit the time unit of delay and period
+         * @param delay    the initial delay before the timer starts
+         * @param period   the period between calls {@link #isExpiredResetOnTrue()}
+         * @param timeUnit the time unit of delay and period
          */
         public Timer(long delay, long period, TimeUnit timeUnit) {
             this.delay = delay;
@@ -461,11 +454,12 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         }
 
         /**
-         * Checks if a call to this method occurs later than {@code period} since the timer was initiated or reset.
-         * If that is the case the method returns true, otherwise it returns false. Each time this method returns true,
-         * the counter is reset (re-initiated) and a new cycle will start.
+         * Checks if a call to this method occurs later than {@code period} since the timer was initiated or reset. If that is the
+         * case the method returns true, otherwise it returns false. Each time this method returns true, the counter is reset
+         * (re-initiated) and a new cycle will start.
          *
-         * @return true if the time elapsed since the last call returning true is greater than {@code period}. Returns false otherwise.
+         * @return true if the time elapsed since the last call returning true is greater than {@code period}. Returns false
+         * otherwise.
          */
         public boolean isExpiredResetOnTrue() {
             final boolean expired = System.nanoTime() - start > periodNanos;
