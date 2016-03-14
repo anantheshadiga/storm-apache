@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy;
+import org.apache.storm.kafka.spout.KafkaSpoutConfig.PollStrategy;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
@@ -58,7 +59,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
     private transient KafkaConsumer<K, V> kafkaConsumer;
     private transient boolean consumerAutoCommitMode;
-    private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
+
 
     // Bookkeeping
     private KafkaSpoutStreams kafkaSpoutStreams;
@@ -69,6 +70,8 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     private transient boolean initialized;          // Flag indicating that the spout is still undergoing initialization process.
     // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
     private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
+    private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
+    private transient PollStrategy pollStrategy;
 
 
     public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tupleBuilder) {
@@ -88,6 +91,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
         // Offset management
         firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
+        pollStrategy = kafkaSpoutConfig.getPollStrategy();
         consumerAutoCommitMode = kafkaSpoutConfig.isConsumerAutoCommitMode();
 
         if (!consumerAutoCommitMode) {     // If it is auto commit, no need to commit offsets manually
@@ -145,7 +149,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                     kafkaConsumer.seekToEnd(tp);
                     fetchOffset = kafkaConsumer.position(tp);
                 } else {
-                    // By default polling starts at the last committed offset. +1 to fetch the first uncommitted offset.
+                    // By default polling starts at the last committed offset. +1 to point fetch to the first uncommitted offset.
                     fetchOffset = committedOffset.offset() + 1;
                     kafkaConsumer.seek(tp, fetchOffset);
                 }
@@ -175,30 +179,54 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         if (initialized) {
             if (commit()) {
                 commitOffsetsForAckedTuples();
-            } else if (!isMaxUncommitted()) {
-                emitTuples(poll());
+            } else if (poll()) {
+                emitTuples(pollKafkaBroker());
             } else {
-                LOG.debug("Reached the max number [{}] of polled records that are pending commit [{}]. " +
-                        "No more polls will occur until the next successful commit.", kafkaSpoutConfig.getMaxUncommittedOffsets(), acked.size());
+                log();
             }
         } else {
             LOG.debug("Spout not initialized. Not sending tuples until initialization completes");
         }
     }
 
-    private boolean isMaxUncommitted() {
-        return acked.size() >= kafkaSpoutConfig.getMaxUncommittedOffsets();
+    private void log() {
+        switch(pollStrategy) {
+            case STREAM:
+                LOG.trace("Reached the max number [{}] of polled records that are pending commit [{}]. " +
+                        "No more polls will occur until a sequence successful commits lowers the pending count under the threshold [{}] ",
+                        kafkaSpoutConfig.getMaxUncommittedOffsets(), numUncommittedOffsets, kafkaSpoutConfig.getMaxUncommittedOffsets());
+                break;
+            case BATCH:
+                LOG.trace("No more polls will occur until the pending batch completes. " +
+                        "[{}] tuples still pending", numUncommittedOffsets);
+                break;
+            default:
+                throw new IllegalStateException("No implementation defined for polling strategy " + pollStrategy);
+        }
+
+    }
+
+    // always poll in auto commit mode because no state is kept and therefore there is no need to set an upper limit in memory
+    private boolean poll()  {
+        switch(pollStrategy) {
+            case STREAM:
+                return consumerAutoCommitMode || numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
+            case BATCH:
+                return consumerAutoCommitMode || numUncommittedOffsets <= 0;
+            default:
+                throw new IllegalStateException("No implementation defined for polling strategy " + pollStrategy);
+        }
     }
 
     private boolean commit() {
         return !consumerAutoCommitMode && timer.isExpiredResetOnTrue();    // timer != null for non auto commit mode
     }
 
-    private ConsumerRecords<K, V> poll() {
+    private ConsumerRecords<K, V> pollKafkaBroker() {
         final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
         final int numPolledRecords = consumerRecords.count();
-        numUncommittedOffsets += numPolledRecords;
-        LOG.debug("Polled [{}] records from Kafka", numPolledRecords);
+        numUncommittedOffsets+= numPolledRecords;
+        LOG.debug("Polled [{}] records from Kafka. NumUncommittedOffsets=[{}]", numPolledRecords, numUncommittedOffsets);
         return consumerRecords;
     }
 
@@ -256,7 +284,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     // ======== Fail =======
 
     @Override
-    public void fail(Object messageId) {
+    public void fail(Object messageId) {   // TODO poll all tuples after the failed tuple
         final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
         if (msgId.numFails() < maxRetries) {
             msgId.incrementNumFails();
@@ -329,15 +357,16 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
      */
     private class OffsetEntry {
         private final TopicPartition tp;
-        private long fetchOffset;                   // Initial offset fetched (initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener)
-        private long committedOffset;               // last offset committed to Kafka. Initially it is set to fetchOffset
+        private final long initialFetchOffset;  /* First offset to be fetched. It is either set to the beginning, end, or to the first uncommitted offset.
+                                                 * Initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener */
+        private long committedOffset;     // last offset committed to Kafka. Initially it is set to fetchOffset - 1
         private final NavigableSet<KafkaSpoutMessageId> ackedMsgs = new TreeSet<>(OFFSET_COMPARATOR);     // acked messages sorted by ascending order of offset
 
-        public OffsetEntry(TopicPartition tp, long fetchOffset) {
+        public OffsetEntry(TopicPartition tp, long initialFetchOffset) {
             this.tp = tp;
-            this.fetchOffset = fetchOffset;
-            this.committedOffset = fetchOffset;
-            LOG.debug("Created OffsetEntry for [topic-partition={}, committed-or-initial-fetch-offset={}]", tp, fetchOffset);
+            this.initialFetchOffset = initialFetchOffset;
+            this.committedOffset = initialFetchOffset - 1;
+            LOG.debug("Created OffsetEntry. {}", this);
         }
 
         public void add(KafkaSpoutMessageId msgId) {          // O(Log N)
@@ -354,7 +383,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             KafkaSpoutMessageId nextCommitMsg = null;     // this is a convenience variable to make it faster to create OffsetAndMetadata
 
             for (KafkaSpoutMessageId currAckedMsg : ackedMsgs) {  // complexity is that of a linear scan on a TreeMap
-                if ((currOffset = currAckedMsg.offset()) == fetchOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
+                if ((currOffset = currAckedMsg.offset()) == initialFetchOffset || currOffset == nextCommitOffset + 1) {            // found the next offset to commit
                     found = true;
                     nextCommitMsg = currAckedMsg;
                     nextCommitOffset = currOffset;
@@ -373,7 +402,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                 nextCommitOffsetAndMetadata = new OffsetAndMetadata(nextCommitOffset, nextCommitMsg.getMetadata(Thread.currentThread()));
                 LOG.trace("Offset to be committed next: [{}] {}", nextCommitOffsetAndMetadata.offset(), this);
             } else {
-                LOG.debug("No offsets ready to commit", this);
+                LOG.debug("No offsets ready to commit. {}", this);
             }
             return nextCommitOffsetAndMetadata;
         }
@@ -386,7 +415,12 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
          */
         public void commit(OffsetAndMetadata committedOffset) {
             if (committedOffset != null) {
-                long numCommittedOffsets = committedOffset.offset() - this.committedOffset + 1;
+                /*final long numCommittedOffsets = this.committedOffset < initialFetchOffset
+                        ? committedOffset.offset() - this.committedOffset + 1       // +1 because fetchOffset is pointing to the first uncommitted offset
+                        : committedOffset.offset() - this.committedOffset;
+*/
+                final long numCommittedOffsets = committedOffset.offset() - this.committedOffset;
+
                 this.committedOffset = committedOffset.offset();
                 for (Iterator<KafkaSpoutMessageId> iterator = ackedMsgs.iterator(); iterator.hasNext(); ) {
                     if (iterator.next().offset() <= committedOffset.offset()) {
@@ -395,7 +429,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                         break;
                     }
                 }
-                numUncommittedOffsets -= numCommittedOffsets;
+                numUncommittedOffsets-= numCommittedOffsets;
             }
             LOG.trace("Object state after update: {}, numUncommittedOffsets [{}]", this, numUncommittedOffsets);
         }
@@ -404,10 +438,20 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             return ackedMsgs.isEmpty();
         }
 
+        /*@Override
+        public String toString() {
+            return "OffsetEntry{" +
+                    "topic-partition=" + tp +
+                    ", committedOffset=" + committedOffset +
+                    ", ackedMsgs=" + ackedMsgs +
+                    '}';
+        }*/
+
         @Override
         public String toString() {
             return "OffsetEntry{" +
                     "topic-partition=" + tp +
+                    ", fetchOffset=" + initialFetchOffset +
                     ", committedOffset=" + committedOffset +
                     ", ackedMsgs=" + ackedMsgs +
                     '}';

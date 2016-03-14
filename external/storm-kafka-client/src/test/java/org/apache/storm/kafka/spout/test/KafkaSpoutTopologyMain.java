@@ -36,7 +36,8 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST;
+import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
+import static org.apache.storm.kafka.spout.KafkaSpoutConfig.PollStrategy.BATCH;
 
 public class KafkaSpoutTopologyMain {
     private static final String[] STREAMS = new String[]{"test_stream","test1_stream","test2_stream"};
@@ -88,7 +89,8 @@ public class KafkaSpoutTopologyMain {
     public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
         return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams)
                 .setOffsetCommitPeriodMs(10_000)
-                .setFirstPollOffsetStrategy(EARLIEST)
+                .setFirstPollOffsetStrategy(UNCOMMITTED_EARLIEST)
+                .setPollStrategy(BATCH)
                 .build();
     }
 

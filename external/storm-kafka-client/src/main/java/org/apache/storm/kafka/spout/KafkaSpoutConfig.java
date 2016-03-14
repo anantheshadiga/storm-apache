@@ -63,18 +63,37 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         UNCOMMITTED_EARLIEST,
         UNCOMMITTED_LATEST }
 
+    /**
+     * Defines when to poll the next batch of records from Kafka. The choice of this parameter will affect throughput and the memory
+     * footprint of the Kafka spout. The allowed values are STREAM and BATCH. STREAM will likely have higher throughput and use more memory
+     * (it stores in memory the entire KafkaRecord,including data). BATCH will likely have less throughput but also use less memory.
+     * The BATCH behavior is similar to the behavior of the previous Kafka Spout. De default value is STREAM.
+     * <ul>
+     *     <li>STREAM Every periodic call to nextTuple polls a new batch of records from Kafka as long as the maxUncommittedOffsets
+     *     threshold has not yet been reached. When the threshold his reached, no more records are polled until enough offsets have been
+     *     committed, such that the number of pending offsets is less than maxUncommittedOffsets. See {@link Builder#setMaxUncommittedOffsets(int)}
+     *     </li>
+     *     <li>BATCH Only polls a new batch of records from kafka once all the records that came in the previous poll have been acked.</li>
+     * </ul>
+     */
+    public enum PollStrategy {
+        STREAM,
+        BATCH
+    }
+
     // Kafka consumer configuration
     private final Map<String, Object> kafkaProps;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
-    private final FirstPollOffsetStrategy firstPollOffsetStrategy;
     private final long pollTimeoutMs;
-    private final KafkaSpoutStreams kafkaSpoutStreams;
 
     // Kafka spout configuration
     private final long offsetCommitPeriodMs;
     private final int maxRetries;
     private final int maxUncommittedOffsets;
+    private final FirstPollOffsetStrategy firstPollOffsetStrategy;
+    private final PollStrategy pollStrategy;
+    private final KafkaSpoutStreams kafkaSpoutStreams;
 
     private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = setDefaultsAndGetKafkaProps(builder.kafkaProps);
@@ -84,6 +103,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         this.offsetCommitPeriodMs = builder.offsetCommitPeriodMs;
         this.maxRetries = builder.maxRetries;
         this.firstPollOffsetStrategy = builder.firstPollOffsetStrategy;
+        this.pollStrategy = builder.pollStrategy;
         this.kafkaSpoutStreams = builder.kafkaSpoutStreams;
         this.maxUncommittedOffsets = builder.maxUncommittedOffsets;
     }
@@ -106,6 +126,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         private FirstPollOffsetStrategy firstPollOffsetStrategy = FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
         private KafkaSpoutStreams kafkaSpoutStreams;
         private int maxUncommittedOffsets = DEFAULT_MAX_UNCOMMITTED_OFFSETS;
+        private PollStrategy pollStrategy = PollStrategy.STREAM;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -173,8 +194,9 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         }
 
         /**
-         * Defines the max number of offsets (records) polled, that are pending commit, before another poll can take place.
-         * Once this limit is reached no more offsets (records) can be polled until the next successful commit. The default is 10000.
+         * Defines the max number of polled offsets (records) that can be pending commit, before another poll can take place.
+         * Once this limit is reached, no more offsets (records) can be polled until the next successful commit(s) sets the number
+         * of pending offsets bellow the threshold. The default is {@link #DEFAULT_MAX_UNCOMMITTED_OFFSETS}.
          * @param maxUncommittedOffsets max number of records that can be be pending commit
          */
         public Builder<K,V> setMaxUncommittedOffsets(int maxUncommittedOffsets) {
@@ -189,6 +211,16 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
          * */
         public Builder<K, V> setFirstPollOffsetStrategy(FirstPollOffsetStrategy firstPollOffsetStrategy) {
             this.firstPollOffsetStrategy = firstPollOffsetStrategy;
+            return this;
+        }
+
+        /**
+         * Sets the strategy used by the the Kafka spout to decide when to poll the next batch of records from Kafka.
+         * Please refer to to the documentation in {@link PollStrategy}
+         * @param pollStrategy strategy used to decide when to poll
+         * */
+        public Builder<K, V> setPollStrategy(PollStrategy pollStrategy) {
+            this.pollStrategy = pollStrategy;
             return this;
         }
 
@@ -244,6 +276,10 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
 
     public int getMaxUncommittedOffsets() {
         return maxUncommittedOffsets;
+    }
+
+    public PollStrategy getPollStrategy() {
+        return pollStrategy;
     }
 
     @Override
