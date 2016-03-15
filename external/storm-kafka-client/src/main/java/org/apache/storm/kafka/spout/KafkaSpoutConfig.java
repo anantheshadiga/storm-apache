@@ -245,7 +245,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         return pollTimeoutMs;
     }
 
-    public long getOffsetsCommitFreqMs() {
+    public long getOffsetsCommitPeriodMs() {
         return offsetCommitPeriodMs;
     }
 

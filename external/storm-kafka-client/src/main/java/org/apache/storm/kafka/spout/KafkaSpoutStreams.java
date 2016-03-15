@@ -53,7 +53,7 @@ public class KafkaSpoutStreams implements Serializable {
     public Fields getOutputFields(String topic) {
         if (topicToStream.containsKey(topic)) {
             final Fields outputFields = topicToStream.get(topic).getOutputFields();
-            LOG.debug("Topic [{}] has output fields [{}]", topic, outputFields);
+            LOG.trace("Topic [{}] has output fields [{}]", topic, outputFields);
             return outputFields;
         }
         throw new IllegalStateException(this.getClass().getName() + " not configured for topic: " + topic);
@@ -66,7 +66,7 @@ public class KafkaSpoutStreams implements Serializable {
     public String getStreamId(String topic) {
         if (topicToStream.containsKey(topic)) {
             final String streamId = topicToStream.get(topic).getStreamId();
-            LOG.debug("Topic [{}] emitting in stream [{}]", topic, streamId);
+            LOG.trace("Topic [{}] emitting in stream [{}]", topic, streamId);
             return streamId;
         }
         throw new IllegalStateException(this.getClass().getName() + " not configured for topic: " + topic);
