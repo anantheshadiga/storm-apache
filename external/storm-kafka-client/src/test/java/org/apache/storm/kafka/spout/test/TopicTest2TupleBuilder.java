@@ -15,40 +15,26 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-
-package org.apache.storm.kafka.spout;
+package org.apache.storm.kafka.spout.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
+import org.apache.storm.tuple.Values;
 
-import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
-public abstract class KafkaSpoutTupleBuilder<K,V> implements Serializable {
-    private List<String> topics;
-
+public class TopicTest2TupleBuilder<K, V> extends KafkaSpoutTupleBuilder<K,V> {
     /**
      * @param topics list of topics that use this implementation to build tuples
      */
-    public KafkaSpoutTupleBuilder(String... topics) {
-        if (topics == null || topics.length == 0) {
-            throw new IllegalArgumentException("Must specify at least one topic. It cannot be null or empty");
-        }
-        this.topics = Arrays.asList(topics);
+    public TopicTest2TupleBuilder(String... topics) {
+        super(topics);
     }
 
-    /**
-     * @return list of topics that use this implementation to build tuples
-     */
-    public List<String> getTopics() {
-        return Collections.unmodifiableList(topics);
+    @Override
+    public List<Object> buildTuple(ConsumerRecord<K, V> consumerRecord) {
+        return new Values(consumerRecord.topic(),
+                consumerRecord.partition(),
+                consumerRecord.offset());
     }
-
-    /**
-     * Builds a list of tuples using the ConsumerRecord specified as parameter
-     * @param consumerRecord whose contents are used to build tuples
-     * @return list of tuples
-     */
-    public abstract List<Object> buildTuple(ConsumerRecord<K, V> consumerRecord);
 }
