@@ -88,8 +88,8 @@ public class KafkaSpoutStreams implements Serializable {
         }
     }
 
-    void emit(SpoutOutputCollector collector, KafkaSpoutMessageId messageId) {
-        collector.emit(getStreamId(messageId.topic()), messageId.getTuple(), messageId);
+    void emit(SpoutOutputCollector collector, List<Object> tuple, KafkaSpoutMessageId messageId) {
+        collector.emit(getStreamId(messageId.topic()), tuple, messageId);
     }
 
     @Override
@@ -103,11 +103,11 @@ public class KafkaSpoutStreams implements Serializable {
         private final Map<String, KafkaSpoutStream> topicToStream = new HashMap<>();;
 
         /**
-         * Creates a {@link KafkaSpoutStream} with this particular stream for each topic specified.
-         * All the topics will have the same stream id and output fields.
+         * Creates a {@link KafkaSpoutStream} with the given output Fields for each topic specified.
+         * All topics will have the same stream id and output fields.
          */
         public Builder(Fields outputFields, String... topics) {
-            this(outputFields, Utils.DEFAULT_STREAM_ID, topics);
+            addStream(outputFields, topics);
         }
 
         /**
@@ -115,16 +115,14 @@ public class KafkaSpoutStreams implements Serializable {
          * All the topics will have the same stream id and output fields.
          */
         public Builder (Fields outputFields, String streamId, String... topics) {
-            for (String topic : topics) {
-                topicToStream.put(topic, new KafkaSpoutStream(outputFields, streamId, topic));
-            }
+            addStream(outputFields, streamId, topics);
         }
 
         /**
          * Adds this stream to the state representing the streams associated with each topic
          */
         public Builder(KafkaSpoutStream stream) {
-            topicToStream.put(stream.getTopic(), stream);
+            addStream(stream);
         }
 
         /**
@@ -139,9 +137,7 @@ public class KafkaSpoutStreams implements Serializable {
          * Please refer to javadoc in {@link #Builder(Fields, String...)}
          */
         public Builder addStream(Fields outputFields, String... topics) {
-            for (String topic : topics) {
-                topicToStream.put(topic, new KafkaSpoutStream(outputFields, topic));
-            }
+            addStream(outputFields, Utils.DEFAULT_STREAM_ID, topics);
             return this;
         }
 

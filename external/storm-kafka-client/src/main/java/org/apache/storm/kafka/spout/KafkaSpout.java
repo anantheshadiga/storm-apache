@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy;
-import org.apache.storm.kafka.spout.KafkaSpoutConfig.PollStrategy;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.OutputFieldsDeclarer;
@@ -36,10 +35,12 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
@@ -62,23 +63,25 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
 
     // Bookkeeping
-    private KafkaSpoutStreams kafkaSpoutStreams;
-    private KafkaSpoutTupleBuilder<K, V> tupleBuilder;
-    private transient Timer commitTimer;                                    // timer == null for auto commit mode
-    private transient Timer logTimer;
-    private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the timer expires, on consumer rebalance, or on close/deactivate
     private transient int maxRetries;                                 // Max number of times a tuple is retried
-    private transient boolean initialized;          // Flag indicating that the spout is still undergoing initialization process.
-    // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
-    private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
     private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
-    private transient PollStrategy pollStrategy;
+    private transient RetryService retryService;
+    private transient Timer commitTimer;                              // timer == null for auto commit mode
+    private transient boolean initialized;                            // Flag indicating that the spout is still undergoing initialization process.
+
+    private KafkaSpoutStreams kafkaSpoutStreams;
+    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
+
+    private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the commit timer expires, after consumer rebalance, or on close/deactivate
+    private transient Set<KafkaSpoutMessageId> emitted;               // Tuples that have been emitted but that are pending being acked or failed
+    private transient Iterator<ConsumerRecord<K, V>> waitingToEmit;   // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
+    // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
+    private transient long numUncommittedOffsets;                     // Number of offsets that have been polled and emitted but not yet been committed
 
 
-    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tupleBuilder) {
+    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
-        this.tupleBuilder = tupleBuilder;
     }
 
     @Override
@@ -89,16 +92,21 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         this.collector = collector;
         maxRetries = kafkaSpoutConfig.getMaxTupleRetries();
         numUncommittedOffsets = 0;
-        logTimer = new Timer(500, Math.min(1000, kafkaSpoutConfig.getOffsetsCommitPeriodMs()/2), TimeUnit.MILLISECONDS);
 
         // Offset management
         firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
-        pollStrategy = kafkaSpoutConfig.getPollStrategy();
         consumerAutoCommitMode = kafkaSpoutConfig.isConsumerAutoCommitMode();
+
+        // Retries management
+        retryService = kafkaSpoutConfig.getRetryService();
+
+        // Tuples builder delegate
+        tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
 
         if (!consumerAutoCommitMode) {     // If it is auto commit, no need to commit offsets manually
             commitTimer = new Timer(500, kafkaSpoutConfig.getOffsetsCommitPeriodMs(), TimeUnit.MILLISECONDS);
             acked = new HashMap<>();
+            emitted = new HashSet<>();
         }
 
         LOG.info("Kafka Spout opened with the following configuration: {}", kafkaSpoutConfig);
@@ -182,42 +190,26 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         if (initialized) {
             if (commit()) {
                 commitOffsetsForAckedTuples();
-            } else if (poll()) {
-                emitTuples(pollKafkaBroker());
-            } else if (logTimer.isExpiredResetOnTrue()) {   // to limit the number of messages that get printed.
-                log();
+            }
+
+            if (poll()) {
+                waitingToEmit = pollKafkaBroker().iterator();
+            }
+
+            if(waitingToEmit.hasNext()) {
+                emitTupleIfNotEmitted(waitingToEmit.next());
+                waitingToEmit.remove();
             }
         } else {
             LOG.debug("Spout not initialized. Not sending tuples until initialization completes");
         }
     }
 
-    private void log() {
-        switch(pollStrategy) {
-            case STREAM:
-                LOG.trace("Reached the maximum number number of uncommitted records [{}]. " +
-                        "No more polls will occur until a sequence of commits sets the count under the [{}] threshold ",
-                        numUncommittedOffsets, kafkaSpoutConfig.getMaxUncommittedOffsets());
-                break;
-            case BATCH:
-                LOG.trace("No more polls will occur until the last batch completes. [{}] emitted tuples pending", numUncommittedOffsets);
-                break;
-            default:
-                throw new IllegalStateException("No implementation defined for polling strategy " + pollStrategy);
-        }
-
-    }
-
     // always poll in auto commit mode because no state is kept and therefore there is no need to set an upper limit in memory
-    private boolean poll()  {
-        switch(pollStrategy) {
-            case STREAM:
-                return consumerAutoCommitMode || numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
-            case BATCH:
-                return consumerAutoCommitMode || numUncommittedOffsets <= 0;
-            default:
-                throw new IllegalStateException("No implementation defined for polling strategy " + pollStrategy);
-        }
+    private boolean poll() {
+        return consumerAutoCommitMode
+                || waitingToEmit != null && !waitingToEmit.hasNext()
+                    && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
     }
 
     private boolean commit() {
@@ -225,24 +217,43 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     }
 
     private ConsumerRecords<K, V> pollKafkaBroker() {
+        doSeekFailedTopicPartitions();
+
         final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
         final int numPolledRecords = consumerRecords.count();
-        numUncommittedOffsets+= numPolledRecords;
         LOG.debug("Polled [{}] records from Kafka. NumUncommittedOffsets=[{}]", numPolledRecords, numUncommittedOffsets);
         return consumerRecords;
     }
 
-    private void emitTuples(ConsumerRecords<K, V> consumerRecords) {
-        for (TopicPartition tp : consumerRecords.partitions()) {
-            final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());
+    private void doSeekFailedTopicPartitions() {
+        final Set<TopicPartition> topicPartitions = retryService.topicPartitions();
 
-            for (final ConsumerRecord<K, V> record : records) {
-                final List<Object> tuple = tupleBuilder.buildTuple(record, kafkaSpoutStreams);
-                final KafkaSpoutMessageId messageId = new KafkaSpoutMessageId(record, tuple);
-
-                kafkaSpoutStreams.emit(collector, messageId);           // emits one tuple per record
-                LOG.trace("Emitted tuple [{}] for record [{}]", tuple, record);
+        for (TopicPartition tp : topicPartitions) {
+            final OffsetAndMetadata offsetAndMeta = acked.get(tp).findNextCommitOffset();
+            if (offsetAndMeta != null) {
+                kafkaConsumer.seek(tp, offsetAndMeta.offset() + 1);  // seek to starting at the offset that is ready to commit in next commit cycle
+            } else {
+                kafkaConsumer.seekToEnd(tp);    // Seek starting at last committed offset
             }
+        }
+    }
+
+    // emits one tuple per record
+    private void emitTupleIfNotEmitted(ConsumerRecord<K, V> record) {
+        final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+        final KafkaSpoutMessageId msgId = new KafkaSpoutMessageId(record);
+
+        if (acked.containsKey(tp) && acked.get(tp).contains(msgId)) {
+            LOG.trace("Tuple for record [{}] has already been acked. Skipping", record);
+        } else if (emitted.contains(msgId)) {
+            LOG.trace("Tuple for record [{}] has already been emitted. Skipping", record);
+        } else if (retryService.retry(msgId)) {
+            final List<Object> tuple = tuplesBuilder.buildTuple(record);
+            kafkaSpoutStreams.emit(collector, tuple, msgId);
+            emitted.add(msgId);
+            retryService.remove(msgId);
+            numUncommittedOffsets++;
+            LOG.trace("Emitted tuple [{}] for record [{}]", tuple, record);
         }
     }
 
@@ -278,6 +289,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         if (!consumerAutoCommitMode) {  // Only need to keep track of acked tuples if commits are not done automatically
             final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
             acked.get(msgId.getTopicPartition()).add(msgId);
+            emitted.remove(msgId);
             LOG.trace("Acked message [{}]. Messages acked and pending commit [{}]", msgId, acked);
         }
     }
@@ -289,7 +301,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
         if (msgId.numFails() < maxRetries) {
             msgId.incrementNumFails();
-            kafkaSpoutStreams.emit(collector, msgId);
+            retryService.schedule(msgId);
             LOG.trace("Retried tuple with message id [{}]", msgId);
         } else { // limit to max number of retries
             LOG.debug("Reached maximum number of retries. Message [{}] being marked as acked.", msgId);
@@ -432,6 +444,14 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
         public boolean isEmpty() {
             return ackedMsgs.isEmpty();
+        }
+
+        public boolean contains(ConsumerRecord record) {
+            return contains(new KafkaSpoutMessageId(record));
+        }
+
+        public boolean contains(KafkaSpoutMessageId msgId) {
+            return ackedMsgs.contains(msgId);
         }
 
         @Override

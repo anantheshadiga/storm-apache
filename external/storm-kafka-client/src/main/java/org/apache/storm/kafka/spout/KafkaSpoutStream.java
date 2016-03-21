@@ -38,6 +38,10 @@ public class KafkaSpoutStream implements Serializable {
 
     /** Declare specified outputFields with specified stream for the specified topic */
     KafkaSpoutStream(Fields outputFields, String streamId, String topic) {
+        if (outputFields == null || streamId == null || topic == null) {
+            throw new IllegalArgumentException(String.format("Constructor parameters cannot be null. " +
+                    "[outputFields=%s, streamId=%s, topic=%s]", outputFields, streamId, topic));
+        }
         this.outputFields = outputFields;
         this.streamId = streamId;
         this.topic = topic;
