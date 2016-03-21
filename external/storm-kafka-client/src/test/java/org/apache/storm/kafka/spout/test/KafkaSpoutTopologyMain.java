@@ -22,11 +22,11 @@ import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
-import org.apache.storm.kafka.spout.KafkaRecordTupleBuilder;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
 import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
+import org.apache.storm.kafka.spout.TopicsTest0Test1TupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Fields;
 
@@ -40,8 +40,8 @@ import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrat
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.PollStrategy.STREAM;
 
 public class KafkaSpoutTopologyMain {
-    private static final String[] STREAMS = new String[]{"test_stream","test1_stream","test2_stream"};
-    private static final String[] TOPICS = new String[]{"test","test1","test2"};
+    private static final String[] STREAMS = new String[]{"test0_stream","test1_stream","test2_stream"};
+    private static final String[] TOPICS = new String[]{"test0","test1","test2"};
 
 
     public static void main(String[] args) throws Exception {
@@ -106,15 +106,15 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static KafkaSpoutTupleBuilder<String,String> getTupleBuilder() {
-        return new KafkaRecordTupleBuilder<>();
+        return new TopicsTest0Test1TupleBuilder<>();
     }
 
     public static KafkaSpoutStreams getKafkaSpoutStreams() {
         final Fields outputFields = new Fields("topic", "partition", "offset", "key", "value");
         final Fields outputFields1 = new Fields("topic", "partition", "offset");
-        return new KafkaSpoutStreams.Builder(outputFields, STREAMS[0], new String[]{TOPICS[0], TOPICS[1]})  // contents of topics test, test1, sent to test_stream
-                .addStream(outputFields, STREAMS[0], new String[]{TOPICS[2]})  // contents topic test2 sent to test_stream
-                .addStream(outputFields1, STREAMS[2], new String[]{TOPICS[2]})  // contents topic test2 sent to test_stream2
+        return new KafkaSpoutStreams.Builder(outputFields, STREAMS[0], new String[]{TOPICS[0], TOPICS[1]})  // contents of topics test0, test1, sent to test0_stream
+                .addStream(outputFields, STREAMS[0], new String[]{TOPICS[2]})  // contents of topic test2 sent to test0_stream
+                .addStream(outputFields1, STREAMS[2], new String[]{TOPICS[2]})  // contents of topic test2 sent to test2_stream
                 .build();
     }
 }

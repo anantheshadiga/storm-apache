@@ -94,6 +94,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     private final FirstPollOffsetStrategy firstPollOffsetStrategy;
     private final PollStrategy pollStrategy;
     private final KafkaSpoutStreams kafkaSpoutStreams;
+    private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
 
     private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = setDefaultsAndGetKafkaProps(builder.kafkaProps);
@@ -106,6 +107,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         this.pollStrategy = builder.pollStrategy;
         this.kafkaSpoutStreams = builder.kafkaSpoutStreams;
         this.maxUncommittedOffsets = builder.maxUncommittedOffsets;
+        this.tuplesBuilder = builder.tuplesBuilder;
     }
 
     private Map<String, Object> setDefaultsAndGetKafkaProps(Map<String, Object> kafkaProps) {
@@ -117,16 +119,17 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     }
 
     public static class Builder<K,V> {
-        private Map<String, Object> kafkaProps;
+        private final Map<String, Object> kafkaProps;
         private Deserializer<K> keyDeserializer;
         private Deserializer<V> valueDeserializer;
         private long pollTimeoutMs = DEFAULT_POLL_TIMEOUT_MS;
         private long offsetCommitPeriodMs = DEFAULT_OFFSET_COMMIT_PERIOD_MS;
         private int maxRetries = DEFAULT_MAX_RETRIES;
         private FirstPollOffsetStrategy firstPollOffsetStrategy = FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
-        private KafkaSpoutStreams kafkaSpoutStreams;
+        private final KafkaSpoutStreams kafkaSpoutStreams;
         private int maxUncommittedOffsets = DEFAULT_MAX_UNCOMMITTED_OFFSETS;
         private PollStrategy pollStrategy = PollStrategy.STREAM;
+        private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -134,16 +137,22 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
          * @param kafkaProps    properties defining consumer connection to Kafka broker as specified in @see <a href="http://kafka.apache.org/090/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html">KafkaConsumer</a>
          * @param kafkaSpoutStreams    streams to where the tuples are emitted for each tuple. Multiple topics can emit in the same stream.
          */
-        public Builder(Map<String, Object> kafkaProps, KafkaSpoutStreams kafkaSpoutStreams) {
+        public Builder(Map<String, Object> kafkaProps, KafkaSpoutStreams kafkaSpoutStreams, KafkaSpoutTuplesBuilder<K,V> tuplesBuilder) {
             if (kafkaProps == null || kafkaProps.isEmpty()) {
-                throw new IllegalArgumentException("Properties defining consumer connection to Kafka broker are required. " + kafkaProps);
+                throw new IllegalArgumentException("Properties defining consumer connection to Kafka broker are required: " + kafkaProps);
             }
 
             if (kafkaSpoutStreams == null)  {
-                throw new IllegalArgumentException("Must specify stream associated with each topic. Multiple topics can emit in the same stream.");
+                throw new IllegalArgumentException("Must specify stream associated with each topic. Multiple topics can emit to the same stream");
             }
+
+            if (tuplesBuilder == null) {
+                throw new IllegalArgumentException("Must specify at last one tuple builder per topic declared in KafkaSpoutStreams");
+            }
+
             this.kafkaProps = kafkaProps;
             this.kafkaSpoutStreams = kafkaSpoutStreams;
+            this.tuplesBuilder = tuplesBuilder;
         }
 
         /**
@@ -258,6 +267,9 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         return (String) kafkaProps.get(Consumer.GROUP_ID);
     }
 
+    /**
+     * @return list of topics subscribed and emitting tuples to a stream as configured by {@link KafkaSpoutStream}
+     */
     public List<String> getSubscribedTopics() {
         return new ArrayList<>(kafkaSpoutStreams.getTopics());
     }
@@ -280,6 +292,10 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
 
     public PollStrategy getPollStrategy() {
         return pollStrategy;
+    }
+
+    public KafkaSpoutTuplesBuilder<K, V> getTuplesBuilder() {
+        return tuplesBuilder;
     }
 
     @Override

@@ -63,7 +63,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // Bookkeeping
     private KafkaSpoutStreams kafkaSpoutStreams;
-    private KafkaSpoutTupleBuilder<K, V> tupleBuilder;
+    private KafkaSpoutTupleBuilder<K, V> tuplesBuilder;
     private transient Timer commitTimer;                                    // timer == null for auto commit mode
     private transient Timer logTimer;
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the timer expires, on consumer rebalance, or on close/deactivate
@@ -73,12 +73,13 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
     private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
     private transient PollStrategy pollStrategy;
+    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
 
 
-    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tupleBuilder) {
+    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tuplesBuilder) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
-        this.tupleBuilder = tupleBuilder;
+        this.tuplesBuilder = tuplesBuilder;
     }
 
     @Override
@@ -95,6 +96,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
         pollStrategy = kafkaSpoutConfig.getPollStrategy();
         consumerAutoCommitMode = kafkaSpoutConfig.isConsumerAutoCommitMode();
+
+        // Tuples builder delegate
+        tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
 
         if (!consumerAutoCommitMode) {     // If it is auto commit, no need to commit offsets manually
             commitTimer = new Timer(500, kafkaSpoutConfig.getOffsetsCommitPeriodMs(), TimeUnit.MILLISECONDS);
@@ -237,7 +241,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             final Iterable<ConsumerRecord<K, V>> records = consumerRecords.records(tp.topic());
 
             for (final ConsumerRecord<K, V> record : records) {
-                final List<Object> tuple = tupleBuilder.buildTuple(record, kafkaSpoutStreams);
+                final List<Object> tuple = tuplesBuilder.buildTuple(record);
                 final KafkaSpoutMessageId messageId = new KafkaSpoutMessageId(record, tuple);
 
                 kafkaSpoutStreams.emit(collector, messageId);           // emits one tuple per record
