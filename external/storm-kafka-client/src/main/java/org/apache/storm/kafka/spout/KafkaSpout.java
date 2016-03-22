@@ -63,7 +63,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // Bookkeeping
     private KafkaSpoutStreams kafkaSpoutStreams;
-    private KafkaSpoutTupleBuilder<K, V> tuplesBuilder;
+    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
     private transient Timer commitTimer;                                    // timer == null for auto commit mode
     private transient Timer logTimer;
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the timer expires, on consumer rebalance, or on close/deactivate
@@ -73,13 +73,11 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
     private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
     private transient PollStrategy pollStrategy;
-    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
 
 
-    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig, KafkaSpoutTupleBuilder<K, V> tuplesBuilder) {
+    public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;                 // Pass in configuration
         this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
-        this.tuplesBuilder = tuplesBuilder;
     }
 
     @Override
@@ -179,11 +177,20 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         }
     }
 
+    private Iterator<ConsumerRecord<K, V>> waitingToEmit;
+
     // ======== Next Tuple =======
 
     @Override
-    public void nextTuple() {
+    public void nextTuple() {waitingToEmit.
         if (initialized) {
+            if(!waitingToEmit.hasNext()) {
+                poll();
+            } else {
+                emitTuples(waitingToEmit.next());
+            }
+
+
             if (commit()) {
                 commitOffsetsForAckedTuples();
             } else if (poll()) {
@@ -214,14 +221,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // always poll in auto commit mode because no state is kept and therefore there is no need to set an upper limit in memory
     private boolean poll()  {
-        switch(pollStrategy) {
-            case STREAM:
-                return consumerAutoCommitMode || numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
-            case BATCH:
-                return consumerAutoCommitMode || numUncommittedOffsets <= 0;
-            default:
-                throw new IllegalStateException("No implementation defined for polling strategy " + pollStrategy);
-        }
+        return waitingToEmit != null && !waitingToEmit.hasNext() && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
     }
 
     private boolean commit() {
