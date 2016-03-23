@@ -23,7 +23,10 @@ public interface RetryService {
 
     void remove(KafkaSpoutMessageId msgId);
 
-    void update(KafkaSpoutMessageId msgId);
+    boolean update(KafkaSpoutMessageId msgId);
 
-    boolean retry(KafkaSpoutMessageId msgId);
+    /**
+     * @return The {@link KafkaSpoutMessageId} to retry next or null if none ready for retrial
+     */
+    KafkaSpoutMessageId next();
 }
