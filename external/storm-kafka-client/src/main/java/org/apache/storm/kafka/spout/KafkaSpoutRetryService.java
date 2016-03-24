@@ -20,9 +20,10 @@ package org.apache.storm.kafka.spout;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.io.Serializable;
 import java.util.Set;
 
-public interface KafkaSpoutRetryService {
+public interface KafkaSpoutRetryService extends Serializable {
     /**
      * Schedule a message for retrial according to the retrial policy specified
      * @param msgId message to schedule for retrial

@@ -20,12 +20,13 @@ package org.apache.storm.kafka.spout;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class KafkaSpoutTuplesBuilder<K,V> {
+public class KafkaSpoutTuplesBuilder<K,V> implements Serializable {
     private Map<String, KafkaSpoutTupleBuilder<K, V>> topicToTupleBuilders;
 
     private KafkaSpoutTuplesBuilder(Builder<K,V> builder) {

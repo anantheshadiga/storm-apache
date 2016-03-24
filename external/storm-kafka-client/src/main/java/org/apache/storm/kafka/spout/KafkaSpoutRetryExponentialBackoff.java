@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -45,7 +46,7 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
     /**
      * Comparator ordering by timestamp 
      */
-    private static class RetryEntryTimeStampComparator implements Comparator<RetrySchedule> {
+    private static class RetryEntryTimeStampComparator implements Serializable, Comparator<RetrySchedule> {
         public int compare(RetrySchedule entry1, RetrySchedule entry2) {
             return Long.valueOf(entry1.nextRetryTimeNanos()).compareTo(entry2.nextRetryTimeNanos());
         }
@@ -87,7 +88,7 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
         }
     }
 
-    public static class Delay {
+    public static class Delay implements Serializable {
         private long delayNanos;
         private long delay;
         private TimeUnit timeUnit;
