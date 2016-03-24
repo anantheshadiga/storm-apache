@@ -98,8 +98,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         consumerAutoCommitMode = kafkaSpoutConfig.isConsumerAutoCommitMode();
 
         // Retries management
-        retryService = new ExponentialBackoffRetry();
-
+        retryService = kafkaSpoutConfig.getRetryService();
 
         // Tuples builder delegate
         tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
@@ -250,7 +249,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             LOG.trace("Tuple for record [{}] has already been emitted. Skipping", record);
         } else if (retryService.retry(msgId)) {
             final List<Object> tuple = tuplesBuilder.buildTuple(record);
-            kafkaSpoutStreams.emit(collector, msgId);
+            kafkaSpoutStreams.emit(collector, tuple, msgId);
             emitted.add(msgId);
             retryService.remove(msgId);
             numUncommittedOffsets++;

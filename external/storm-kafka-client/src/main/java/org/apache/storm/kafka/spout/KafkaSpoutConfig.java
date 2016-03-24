@@ -76,6 +76,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     private final FirstPollOffsetStrategy firstPollOffsetStrategy;
     private final KafkaSpoutStreams kafkaSpoutStreams;
     private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
+    private final RetryService retryService;
 
     private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = setDefaultsAndGetKafkaProps(builder.kafkaProps);
@@ -88,6 +89,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         this.kafkaSpoutStreams = builder.kafkaSpoutStreams;
         this.maxUncommittedOffsets = builder.maxUncommittedOffsets;
         this.tuplesBuilder = builder.tuplesBuilder;
+        this.retryService = builder.retryService;
     }
 
     private Map<String, Object> setDefaultsAndGetKafkaProps(Map<String, Object> kafkaProps) {
@@ -109,6 +111,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         private final KafkaSpoutStreams kafkaSpoutStreams;
         private int maxUncommittedOffsets = DEFAULT_MAX_UNCOMMITTED_OFFSETS;
         private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
+        private final RetryService retryService;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -116,7 +119,8 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
          * @param kafkaProps    properties defining consumer connection to Kafka broker as specified in @see <a href="http://kafka.apache.org/090/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html">KafkaConsumer</a>
          * @param kafkaSpoutStreams    streams to where the tuples are emitted for each tuple. Multiple topics can emit in the same stream.
          */
-        public Builder(Map<String, Object> kafkaProps, KafkaSpoutStreams kafkaSpoutStreams, KafkaSpoutTuplesBuilder<K,V> tuplesBuilder) {
+        public Builder(Map<String, Object> kafkaProps, KafkaSpoutStreams kafkaSpoutStreams,
+                       KafkaSpoutTuplesBuilder<K,V> tuplesBuilder, RetryService retryService) {
             if (kafkaProps == null || kafkaProps.isEmpty()) {
                 throw new IllegalArgumentException("Properties defining consumer connection to Kafka broker are required: " + kafkaProps);
             }
@@ -129,9 +133,14 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
                 throw new IllegalArgumentException("Must specify at last one tuple builder per topic declared in KafkaSpoutStreams");
             }
 
+            if (retryService == null) {
+                throw new IllegalArgumentException("Must specify at implementation of retry service");
+            }
+
             this.kafkaProps = kafkaProps;
             this.kafkaSpoutStreams = kafkaSpoutStreams;
             this.tuplesBuilder = tuplesBuilder;
+            this.retryService = retryService;
         }
 
         /**
@@ -261,6 +270,10 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
 
     public KafkaSpoutTuplesBuilder<K, V> getTuplesBuilder() {
         return tuplesBuilder;
+    }
+
+    public RetryService getRetryService() {
+        return retryService;
     }
 
     @Override

@@ -22,10 +22,12 @@ import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
+import org.apache.storm.kafka.spout.ExponentialBackoffRetry;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
 import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
+import org.apache.storm.kafka.spout.RetryService;
 import org.apache.storm.kafka.spout.TopicsTest0Test1TupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Fields;
@@ -35,9 +37,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST;
-import static org.apache.storm.kafka.spout.KafkaSpoutConfig.PollStrategy.STREAM;
 
 public class KafkaSpoutTopologyMain {
     private static final String[] STREAMS = new String[]{"test0_stream","test1_stream","test2_stream"};
@@ -87,12 +89,16 @@ public class KafkaSpoutTopologyMain {
     }
 
     public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams)
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams, getTupleBuilder(), getRetryService())
                 .setOffsetCommitPeriodMs(10_000)
                 .setFirstPollOffsetStrategy(EARLIEST)
                 .setPollStrategy(STREAM)
                 .setMaxUncommittedOffsets(250)
                 .build();
+    }
+
+    private static RetryService getRetryService() {
+        return new ExponentialBackoffRetry(new ExponentialBackoffRetry.Delay(2, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE);
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {

@@ -26,7 +26,7 @@ public class TopicTest2TupleBuilder<K, V> extends KafkaSpoutTupleBuilder<K,V> {
     /**
      * @param topics list of topics that use this implementation to build the tuple
      */
-    public TopicTest2TupleBuilder(List<String> topics) {
+    public TopicTest2TupleBuilder(String... topics) {
         super(topics);
     }
 
