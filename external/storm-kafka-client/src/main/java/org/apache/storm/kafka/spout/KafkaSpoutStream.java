@@ -31,12 +31,12 @@ public class KafkaSpoutStream implements Serializable {
     private final String streamId;
     private final String topic;
 
-    /** Declare specified outputFields with default stream for the specified topic */
+    /** Represents the specified outputFields and topic with the default stream */
     KafkaSpoutStream(Fields outputFields, String topic) {
         this(outputFields, Utils.DEFAULT_STREAM_ID, topic);
     }
 
-    /** Declare specified outputFields with specified stream for the specified topic */
+    /** Represents the specified outputFields and topic with the specified stream */
     KafkaSpoutStream(Fields outputFields, String streamId, String topic) {
         if (outputFields == null || streamId == null || topic == null) {
             throw new IllegalArgumentException(String.format("Constructor parameters cannot be null. " +
@@ -47,15 +47,15 @@ public class KafkaSpoutStream implements Serializable {
         this.topic = topic;
     }
 
-    public Fields getOutputFields() {
+    Fields getOutputFields() {
         return outputFields;
     }
 
-    public String getStreamId() {
+    String getStreamId() {
         return streamId;
     }
 
-    public String getTopic() {
+    String getTopic() {
         return topic;
     }
 

@@ -36,6 +36,7 @@ public class KafkaSpoutTuplesBuilder<K,V> {
         private List<KafkaSpoutTupleBuilder<K, V>> tupleBuilders;
         private Map<String, KafkaSpoutTupleBuilder<K, V>> topicToTupleBuilders;
 
+        @SafeVarargs
         public Builder(KafkaSpoutTupleBuilder<K,V>... tupleBuilders) {
             if (tupleBuilders == null || tupleBuilders.length == 0) {
                 throw new IllegalArgumentException("Must specify at last one tuple builder per topic declared in KafkaSpoutStreams");

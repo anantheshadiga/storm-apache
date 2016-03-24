@@ -30,8 +30,6 @@ import java.util.Map;
 
 public class KafkaSpoutTestBolt extends BaseRichBolt {
     protected static final Logger LOG = LoggerFactory.getLogger(KafkaSpoutTestBolt.class);
-
-
     private OutputCollector collector;
 
     @Override

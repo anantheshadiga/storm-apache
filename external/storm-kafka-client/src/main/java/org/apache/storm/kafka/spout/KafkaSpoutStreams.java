@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Represents the output streams associated with each topic, and provides a public API to
+ * Represents the {@link KafkaSpoutStream} associated with each topic, and provides a public API to
  * declare output streams and emmit tuples, on the appropriate stream, for all the topics specified.
  */
 public class KafkaSpoutStreams implements Serializable {
@@ -48,7 +48,7 @@ public class KafkaSpoutStreams implements Serializable {
 
     /**
      * @param topic the topic for which to get output fields
-     * @return the output fields declared
+     * @return the declared output fields
      */
     public Fields getOutputFields(String topic) {
         if (topicToStream.containsKey(topic)) {
@@ -79,7 +79,7 @@ public class KafkaSpoutStreams implements Serializable {
         return new ArrayList<>(topicToStream.keySet());
     }
 
-    void declareOutputFields(OutputFieldsDeclarer declarer) {
+    public void declareOutputFields(OutputFieldsDeclarer declarer) {
         for (KafkaSpoutStream stream : topicToStream.values()) {
             if (!((OutputFieldsGetter)declarer).getFieldsDeclaration().containsKey(stream.getStreamId())) {
                 declarer.declareStream(stream.getStreamId(), stream.getOutputFields());
@@ -88,7 +88,7 @@ public class KafkaSpoutStreams implements Serializable {
         }
     }
 
-    void emit(SpoutOutputCollector collector, List<Object> tuple, KafkaSpoutMessageId messageId) {
+    public void emit(SpoutOutputCollector collector, List<Object> tuple, KafkaSpoutMessageId messageId) {
         collector.emit(getStreamId(messageId.topic()), tuple, messageId);
     }
 

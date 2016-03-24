@@ -113,10 +113,10 @@ public class KafkaSpoutTopologyMain {
         return props;
     }
 
-    public static KafkaSpoutTuplesBuilder getTuplesBuilder() {
-        return new KafkaSpoutTuplesBuilder.Builder(
-                new TopicsTest0Test1TupleBuilder<>(TOPICS[0], TOPICS[1]),
-                new TopicTest2TupleBuilder<>(TOPICS[2]))
+    public static KafkaSpoutTuplesBuilder<String, String> getTuplesBuilder() {
+        return new KafkaSpoutTuplesBuilder.Builder<>(
+                new TopicsTest0Test1TupleBuilder<String, String>(TOPICS[0], TOPICS[1]),
+                new TopicTest2TupleBuilder<String, String>(TOPICS[2]))
                 .build();
     }
 
