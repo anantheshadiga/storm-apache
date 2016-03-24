@@ -22,12 +22,12 @@ import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
-import org.apache.storm.kafka.spout.ExponentialBackoffRetry;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
+import org.apache.storm.kafka.spout.KafkaSpoutExponentialBackoffRetry;
+import org.apache.storm.kafka.spout.KafkaSpoutRetryService;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
 import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder;
-import org.apache.storm.kafka.spout.RetryService;
 import org.apache.storm.kafka.spout.TopicTest2TupleBuilder;
 import org.apache.storm.kafka.spout.TopicsTest0Test1TupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
@@ -97,12 +97,12 @@ public class KafkaSpoutTopologyMain {
                 .build();
     }
 
-    private static RetryService getRetryService() {
-        return new ExponentialBackoffRetry(getDelay(5, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE, getDelay(10, TimeUnit.SECONDS));
+    private static KafkaSpoutRetryService getRetryService() {
+        return new KafkaSpoutExponentialBackoffRetry(getDelay(5, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE, getDelay(10, TimeUnit.SECONDS));
     }
 
-    private static ExponentialBackoffRetry.Delay getDelay(long delay, TimeUnit timeUnit) {
-        return new ExponentialBackoffRetry.Delay(delay, timeUnit);
+    private static KafkaSpoutExponentialBackoffRetry.Delay getDelay(long delay, TimeUnit timeUnit) {
+        return new KafkaSpoutExponentialBackoffRetry.Delay(delay, timeUnit);
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {

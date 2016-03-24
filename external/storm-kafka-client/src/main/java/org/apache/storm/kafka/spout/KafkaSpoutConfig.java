@@ -76,7 +76,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
     private final FirstPollOffsetStrategy firstPollOffsetStrategy;
     private final KafkaSpoutStreams kafkaSpoutStreams;
     private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
-    private final RetryService retryService;
+    private final KafkaSpoutRetryService retryService;
 
     private KafkaSpoutConfig(Builder<K,V> builder) {
         this.kafkaProps = setDefaultsAndGetKafkaProps(builder.kafkaProps);
@@ -111,7 +111,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         private final KafkaSpoutStreams kafkaSpoutStreams;
         private int maxUncommittedOffsets = DEFAULT_MAX_UNCOMMITTED_OFFSETS;
         private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
-        private final RetryService retryService;
+        private final KafkaSpoutRetryService retryService;
 
         /***
          * KafkaSpoutConfig defines the required configuration to connect a consumer to a consumer group, as well as the subscribing topics
@@ -120,7 +120,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
          * @param kafkaSpoutStreams    streams to where the tuples are emitted for each tuple. Multiple topics can emit in the same stream.
          */
         public Builder(Map<String, Object> kafkaProps, KafkaSpoutStreams kafkaSpoutStreams,
-                       KafkaSpoutTuplesBuilder<K,V> tuplesBuilder, RetryService retryService) {
+                       KafkaSpoutTuplesBuilder<K,V> tuplesBuilder, KafkaSpoutRetryService retryService) {
             if (kafkaProps == null || kafkaProps.isEmpty()) {
                 throw new IllegalArgumentException("Properties defining consumer connection to Kafka broker are required: " + kafkaProps);
             }
@@ -272,7 +272,7 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         return tuplesBuilder;
     }
 
-    public RetryService getRetryService() {
+    public KafkaSpoutRetryService getRetryService() {
         return retryService;
     }
 

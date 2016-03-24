@@ -45,7 +45,7 @@ public class KafkaSpoutTuplesBuilder<K,V> {
             topicToTupleBuilders = new HashMap<>();
         }
 
-        public KafkaSpoutTuplesBuilder build() {
+        public KafkaSpoutTuplesBuilder<K,V> build() {
             for (KafkaSpoutTupleBuilder<K, V> tupleBuilder : tupleBuilders) {
                 for (String topic : tupleBuilder.getTopics()) {
                     if (!topicToTupleBuilders.containsKey(topic)) {
@@ -53,7 +53,7 @@ public class KafkaSpoutTuplesBuilder<K,V> {
                     }
                 }
             }
-            return new KafkaSpoutTuplesBuilder(this);
+            return new KafkaSpoutTuplesBuilder<>(this);
         }
     }
 

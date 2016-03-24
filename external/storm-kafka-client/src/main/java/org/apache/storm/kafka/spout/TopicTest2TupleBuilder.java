@@ -24,7 +24,7 @@ import java.util.List;
 
 public class TopicTest2TupleBuilder<K, V> extends KafkaSpoutTupleBuilder<K,V> {
     /**
-     * @param topics list of topics that use this implementation to build the tuple
+     * @param topics list of topics that use this implementation to build tuples
      */
     public TopicTest2TupleBuilder(String... topics) {
         super(topics);

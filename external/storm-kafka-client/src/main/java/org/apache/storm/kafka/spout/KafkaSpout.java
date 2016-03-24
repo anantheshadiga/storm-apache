@@ -65,7 +65,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     // Bookkeeping
     private transient int maxRetries;                                 // Max number of times a tuple is retried
     private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
-    private transient RetryService retryService;
+    private transient KafkaSpoutRetryService retryService;
     private transient Timer commitTimer;                              // timer == null for auto commit mode
     private transient boolean initialized;                            // Flag indicating that the spout is still undergoing initialization process.
 
