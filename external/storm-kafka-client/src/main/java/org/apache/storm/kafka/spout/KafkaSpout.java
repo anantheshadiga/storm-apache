@@ -199,6 +199,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
             if(waitingToEmit.hasNext()) {
                 emitTupleIfNotEmitted(waitingToEmit.next());
+                waitingToEmit.remove();
             }
         } else {
             LOG.debug("Spout not initialized. Not sending tuples until initialization completes");
@@ -217,10 +218,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     }
 
     private ConsumerRecords<K, V> pollKafkaBroker() {
-        final KafkaSpoutMessageId nextMsgToRetry = retryService.next();
-        if (nextMsgToRetry != null) {
-            kafkaConsumer.seekToEnd(nextMsgToRetry.getTopicPartition());
-        }
+        doSeekFailedTopicPartitions();
 
         final ConsumerRecords<K, V> consumerRecords = kafkaConsumer.poll(kafkaSpoutConfig.getPollTimeoutMs());
         final int numPolledRecords = consumerRecords.count();
@@ -228,21 +226,38 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         return consumerRecords;
     }
 
+    private void doSeekFailedTopicPartitions() {
+        final Set<TopicPartition> topicPartitions = retryService.topicPartitions();
+
+        for (TopicPartition tp : topicPartitions) {
+//            kafkaConsumer.seekToEnd(tp.getTopicPartition(), tp.offset() + 1);    //TODO Check + 1
+            final OffsetAndMetadata offsetAndMeta = acked.get(tp).findNextCommitOffset();
+            if (offsetAndMeta != null) {
+                kafkaConsumer.seek(tp, offsetAndMeta.offset() + 1);  // seek to starting at the offset that is ready to commit in next commit cycle
+            } else {
+                kafkaConsumer.seekToEnd(tp);    // Seek starting at last committed offset
+            }
+        }
+    }
+
     // emits one tuple per record
-    private void emitTupleIfNotEmitted(ConsumerRecord<K, V> record) {
-        if (acked.containsKey(new TopicPartition(record.topic(), record.partition()))) {
-            LOG.trace("Tuple for record [{}] has already been acked. Skipping");
-        } else if (emitted.contains(new KafkaSpoutMessageId(record))) {
-            LOG.trace("Tuple for record [{}] has already been emitted. Skipping");
-        } else {
+    private void emitTupleIfNotEmitted(ConsumerRecord<K, V> record) {           TODO Cleanup when to emit
+        final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+        final KafkaSpoutMessageId msgId = new KafkaSpoutMessageId(record);
+
+        if (acked.containsKey(tp) && acked.get(tp).contains(msgId)) {
+            LOG.trace("Tuple for record [{}] has already been acked. Skipping", record);
+        } else if (emitted.contains(msgId)) {
+            LOG.trace("Tuple for record [{}] has already been emitted. Skipping", record);
+        } else if {
             final List<Object> tuple = tuplesBuilder.buildTuple(record);
-            final KafkaSpoutMessageId msgId = new KafkaSpoutMessageId(record);
+            final KafkaSpoutMessageId msgId = msgId;
             kafkaSpoutStreams.emit(collector, msgId);
             emitted.add(msgId);
+            retryService.remove(msgId);
             numUncommittedOffsets++;
             LOG.trace("Emitted tuple [{}] for record [{}]", tuple, record);
         }
-        waitingToEmit.remove();
     }
 
     private void commitOffsetsForAckedTuples() {
@@ -289,7 +304,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
         if (msgId.numFails() < maxRetries) {
             msgId.incrementNumFails();
-            retryService.add(msgId);
+            retryService.schedule(msgId);
             LOG.trace("Retried tuple with message id [{}]", msgId);
         } else { // limit to max number of retries
             LOG.debug("Reached maximum number of retries. Message [{}] being marked as acked.", msgId);
@@ -432,6 +447,14 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
         public boolean isEmpty() {
             return ackedMsgs.isEmpty();
+        }
+
+        public boolean contains(ConsumerRecord record) {
+            return contains(new KafkaSpoutMessageId(record));
+        }
+
+        public boolean contains(KafkaSpoutMessageId msgId) {
+            return ackedMsgs.contains(msgId);
         }
 
         @Override

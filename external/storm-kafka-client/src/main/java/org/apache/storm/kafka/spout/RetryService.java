@@ -18,15 +18,23 @@
 
 package org.apache.storm.kafka.spout;
 
-public interface RetryService {
-    void add(KafkaSpoutMessageId msgId);
+import org.apache.kafka.common.TopicPartition;
 
-    void remove(KafkaSpoutMessageId msgId);
+import java.util.Set;
+
+public interface RetryService {
+    void schedule(KafkaSpoutMessageId msgId);
+
+    boolean remove(KafkaSpoutMessageId msgId);
 
     boolean update(KafkaSpoutMessageId msgId);
 
     /**
      * @return The {@link KafkaSpoutMessageId} to retry next or null if none ready for retrial
      */
-    KafkaSpoutMessageId next();
+    Set<KafkaSpoutMessageId> next();
+
+    Set<TopicPartition> topicPartitions();
+
+    boolean retry(KafkaSpoutMessageId msgId);
 }
