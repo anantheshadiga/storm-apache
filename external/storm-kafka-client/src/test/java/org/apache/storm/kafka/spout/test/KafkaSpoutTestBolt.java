@@ -28,8 +28,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public class KafkaTestBolt extends BaseRichBolt {
-    protected static final Logger LOG = LoggerFactory.getLogger(KafkaTestBolt.class);
+public class KafkaSpoutTestBolt extends BaseRichBolt {
+    protected static final Logger LOG = LoggerFactory.getLogger(KafkaSpoutTestBolt.class);
 
 
     private OutputCollector collector;

@@ -15,9 +15,10 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.apache.storm.kafka.spout;
+package org.apache.storm.kafka.spout.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
 import org.apache.storm.tuple.Values;
 
 import java.util.List;
