@@ -18,20 +18,13 @@
 
 package org.apache.storm.kafka.spout;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Queue;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
@@ -39,7 +32,6 @@ import java.util.concurrent.TimeUnit;
 public class ExponentialBackoffRetry implements RetryService {
     private static final Logger LOG = LoggerFactory.getLogger(ExponentialBackoffRetry.class);
     private static final RetryEntryTimeStampComparator RETRY_ENTRY_TIME_STAMP_COMPARATOR = new RetryEntryTimeStampComparator();
-    private static final MessageIdTopicPartitionComparator MESSAGE_ID_TOPIC_PARTITION_COMPARATOR = new MessageIdTopicPartitionComparator();
 
     // nextRetry = delay + step^(retryCount - 1)
     private Delay delay;
@@ -56,19 +48,6 @@ public class ExponentialBackoffRetry implements RetryService {
     private static class RetryEntryTimeStampComparator implements Comparator<RetrySchedule> {
         public int compare(RetrySchedule entry1, RetrySchedule entry2) {
             return Long.valueOf(entry1.nextRetryTimeNanos()).compareTo(entry2.nextRetryTimeNanos());
-        }
-    }
-
-    /**
-     * Comparator ordering by topic first and then per partition number 
-     */
-    private static class MessageIdTopicPartitionComparator implements Comparator<KafkaSpoutMessageId> {
-        public int compare(KafkaSpoutMessageId msg1, KafkaSpoutMessageId msg2) {
-            if (msg1.topic().compareTo(msg2.topic()) < 0)
-                return -1;
-            if (msg1.topic().compareTo(msg2.topic()) > 0)
-                return 1;
-            return msg1.partition() - msg2.partition();
         }
     }
 
@@ -97,9 +76,8 @@ public class ExponentialBackoffRetry implements RetryService {
     }
 
     /**
-     * The time stamp of the next retry is scheduled according to the formula (shifted geometric progression): nextRetry =
-     * retryCount == 0 ? System.nanoTime() + delay + ratio^(retryCount) : System.nanoTime() + ratio^(retryCount) Note: retryCount
-     * and failCount
+     * The time stamp of the next retry is scheduled according to the formula (shifted geometric progression): 
+     * nextRetry = failCount == 1 ? System.nanoTime() + delay + ratio^(failCount-1) : System.nanoTime() + ratio^(failCount-1)
      *
      * @param delay      initial delay
      * @param ratio      ratio of the geometric progression
@@ -111,47 +89,30 @@ public class ExponentialBackoffRetry implements RetryService {
         this.maxRetries = maxRetries;
     }
 
-
-    /**
-     * @return One KafkaSpoutMessageId per topic partition that ais ready to be retried, i.e. exponential backoff has expired
-     */
-    @Override
-    public Set<KafkaSpoutMessageId> next() {
-        final Set<KafkaSpoutMessageId> result = new TreeSet<>(MESSAGE_ID_TOPIC_PARTITION_COMPARATOR);
-        final long currentTime = System.nanoTime();
-        for (RetrySchedule retrySchedule : retrySchedules) {
-            if (retrySchedule.nextRetryTimeNanos() <  currentTime) {
-                result.add(retrySchedule.msgId);
-            } else {
-                break;
-            }
-        }
-        LOG.debug("Next retry [{}] ", result);
-        return result;
-    }
-
     @Override
     public Set<TopicPartition> topicPartitions() {
-        final Set<TopicPartition> result = new TreeSet<>();
-        final long currentTime = System.nanoTime();
+        final Set<TopicPartition> tps = new TreeSet<>();
+        final long currentTimeNanos = System.nanoTime();
         for (RetrySchedule retrySchedule : retrySchedules) {
-            if (retrySchedule.nextRetryTimeNanos() <  currentTime) {
+            if (retrySchedule.nextRetryTimeNanos <  currentTimeNanos) {
                 final KafkaSpoutMessageId msgId = retrySchedule.msgId;
-                result.add(new TopicPartition(msgId.topic(), msgId.partition()));
+                tps.add(new TopicPartition(msgId.topic(), msgId.partition()));
             } else {
-                break;
+                break;  // Stop search as soon passed current time
             }
         }
-        LOG.debug("Topic partitions affected in next retry [{}] ", result);
-        return result;
+        LOG.debug("Topic partitions with entries ready to be retried [{}] ", tps);
+        return tps;
     }
 
     @Override
     public boolean retry(KafkaSpoutMessageId msgId) {
-        final long currentTime = System.nanoTime();
+        boolean retry = false;
+        final long currentTimeNanos = System.nanoTime();
         for (RetrySchedule retrySchedule : retrySchedules) {
-            if (retrySchedule.nextRetryTimeNanos <  currentTime) {
+            if (retrySchedule.retry(currentTimeNanos)) {
                 if (retrySchedule.msgId.equals(msgId)) {
+                    retry = true;
                     LOG.debug("Found entry to retry {}", retrySchedule);
                 }
             } else {
@@ -159,62 +120,24 @@ public class ExponentialBackoffRetry implements RetryService {
                 break;
             }
         }
-
-    }
-
-
-    @Override
-    public boolean update(KafkaSpoutMessageId msgId) {
-        boolean updated;
-        if (failedMsgs.contains(msgId)) {
-            for (RetrySchedule retrySchedule : this.retrySchedules) {
-                if (retrySchedule.msgId.equals(msgId)) {
-                    retrySchedule.setNextRetryTime();
-                    updated = true;
-                }
-            }
-        }
-
-    }
-
-    public <K, V> boolean update(ConsumerRecords<K, V> consumerRecords) {
-        Map<TopicPartition, Long> tpToLargestFetchedOffset = new HashMap<>();
-        for (TopicPartition tp : consumerRecords.partitions()) {
-            final List<ConsumerRecord<K, V>> records = consumerRecords.records(tp);
-            tpToLargestFetchedOffset.put(tp, records.get(records.size() - 1).offset());
-        }
-
-
-        for (ConsumerRecord<K, V> record : consumerRecords) {
-            if (failedMsgs.contains(new KafkaSpoutMessageId(record)) &&)
-        }
-        boolean updated;
-        if (failedMsgs.contains(msgId)) {
-            for (RetrySchedule retrySchedule : this.retrySchedules) {
-                if (retrySchedule.msgId.equals(msgId)) {
-                    retrySchedule.setNextRetryTime();
-                    updated = true;
-                }
-            }
-        }
-
+        return retry;
     }
 
     @Override
     public boolean remove(KafkaSpoutMessageId msgId) {
-        boolean exists = false;
         if (failedMsgs.contains(msgId)) {
             for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
                 final RetrySchedule retrySchedule = iterator.next();
                 if (retrySchedule.msgId().equals(msgId)) {
                     iterator.remove();
-                    exists = true;
+                    failedMsgs.remove(msgId);
                     LOG.debug("Removed {}", retrySchedule);
-                    break;
+                    return true;
                 }
             }
         }
-        return exists;
+        LOG.debug("Not found {}", msgId);
+        return false;
     }
 
     /**
@@ -223,44 +146,21 @@ public class ExponentialBackoffRetry implements RetryService {
     @Override
     public void schedule(KafkaSpoutMessageId msgId) {
         if (msgId.numFails() > maxRetries) {
-            LOG.debug("Not scheduling retry number [{}] because reached maximum number of retries [{}].",
-                    msgId.numFails(), maxRetries);
+            LOG.debug("Not scheduling [{}] because reached maximum number of retries [{}].", msgId, maxRetries);
         } else {
             if (failedMsgs.contains(msgId)) {
                 for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
                     final RetrySchedule retrySchedule = iterator.next();
                     if (retrySchedule.msgId().equals(msgId)) {
                         iterator.remove();
+                        failedMsgs.remove(msgId);
                     }
                 }
             }
             final RetrySchedule retrySchedule = new RetrySchedule(msgId, nextTime(msgId));
             retrySchedules.add(retrySchedule);
-            LOG.debug("{}", retrySchedule);
-        }
-    }
-
-    public static class RetryEntries {
-        private RetryEntryTimeStampComparator RETRY_ENTRY_TIME_STAMP_COMPARATOR = new RetryEntryTimeStampComparator();
-        private Queue<RetrySchedule> entryHeap = new PriorityQueue<>(RETRY_ENTRY_TIME_STAMP_COMPARATOR);
-        private Set<RetrySchedule> entrySet = new HashSet<>();
-
-        public void add(RetrySchedule retrySchedule) {
-            entryHeap.add(retrySchedule);
-            entrySet.add(retrySchedule);
-        }
-
-        public boolean remove(RetrySchedule retrySchedule) {
-            entryHeap.remove(retrySchedule);
-            return entrySet.remove(retrySchedule);
-        }
-
-        public boolean contains(RetrySchedule retrySchedule) {
-            return entrySet.contains(retrySchedule);
-        }
-
-        public RetrySchedule first() {
-            return entryHeap.peek();
+            failedMsgs.add(msgId);
+            LOG.debug("Scheduled. {}", retrySchedule);
         }
     }
 
@@ -287,8 +187,8 @@ public class ExponentialBackoffRetry implements RetryService {
             LOG.debug("Updated {}", this);
         }
 
-        public boolean retry() {
-            return nextRetryTimeNanos >= System.nanoTime();
+        public boolean retry(long currentTimeNanos) {
+            return nextRetryTimeNanos <= currentTimeNanos;
         }
 
         @Override

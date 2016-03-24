@@ -23,18 +23,30 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Set;
 
 public interface RetryService {
+    /**
+     * Schedule a message for retrial according to the retrial policty
+     * @param msgId message to schedule for retrial
+     */
     void schedule(KafkaSpoutMessageId msgId);
 
-    boolean remove(KafkaSpoutMessageId msgId);
-
-    boolean update(KafkaSpoutMessageId msgId);
 
     /**
-     * @return The {@link KafkaSpoutMessageId} to retry next or null if none ready for retrial
+     * Removes a message from the list of messages scheduled for retrial
+     * @param msgId message to remove from retrial
      */
-    Set<KafkaSpoutMessageId> next();
+    boolean remove(KafkaSpoutMessageId msgId);
 
+    /**
+     * @return set of topic partitions that have offsets that are ready to be retried, i.e.,
+     * that failed, and whose retry time is greater than current time
+     */
     Set<TopicPartition> topicPartitions();
 
+
+    /**
+     * Checks if a specific failed {@link KafkaSpoutMessageId} is is ready to be retried,
+     * i.e have retry time is greater than current time.
+     * @return true if message is ready to be retried, false otherwise
+     */
     boolean retry(KafkaSpoutMessageId msgId);
 }

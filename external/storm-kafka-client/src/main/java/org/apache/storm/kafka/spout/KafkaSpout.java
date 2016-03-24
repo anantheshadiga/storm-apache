@@ -63,19 +63,20 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
 
     // Bookkeeping
-    private KafkaSpoutStreams kafkaSpoutStreams;
-    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
-    private transient Timer commitTimer;                                    // timer == null for auto commit mode
-    private transient Timer logTimer;
-    private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the commit timer expires, after consumer rebalance, or on close/deactivate
-    private transient Set<KafkaSpoutMessageId> emitted;                         // Tuples that have been emitted but that are pending ack or fail
-    private transient Iterator<ConsumerRecord<K, V>> waitingToEmit;             // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
     private transient int maxRetries;                                 // Max number of times a tuple is retried
-    private transient boolean initialized;          // Flag indicating that the spout is still undergoing initialization process.
-    // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
-    private transient long numUncommittedOffsets;   // Number of offsets that have been polled and emitted but not yet been committed
     private transient FirstPollOffsetStrategy firstPollOffsetStrategy;
     private transient RetryService retryService;
+    private transient Timer commitTimer;                              // timer == null for auto commit mode
+    private transient boolean initialized;                            // Flag indicating that the spout is still undergoing initialization process.
+
+    private KafkaSpoutStreams kafkaSpoutStreams;
+    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
+
+    private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the commit timer expires, after consumer rebalance, or on close/deactivate
+    private transient Set<KafkaSpoutMessageId> emitted;               // Tuples that have been emitted but that are pending being acked or failed
+    private transient Iterator<ConsumerRecord<K, V>> waitingToEmit;   // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
+    // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
+    private transient long numUncommittedOffsets;                     // Number of offsets that have been polled and emitted but not yet been committed
 
 
     public KafkaSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
@@ -91,7 +92,6 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         this.collector = collector;
         maxRetries = kafkaSpoutConfig.getMaxTupleRetries();
         numUncommittedOffsets = 0;
-        logTimer = new Timer(500, Math.min(1000, kafkaSpoutConfig.getOffsetsCommitPeriodMs() / 2), TimeUnit.MILLISECONDS);
 
         // Offset management
         firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
@@ -230,7 +230,6 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         final Set<TopicPartition> topicPartitions = retryService.topicPartitions();
 
         for (TopicPartition tp : topicPartitions) {
-//            kafkaConsumer.seekToEnd(tp.getTopicPartition(), tp.offset() + 1);    //TODO Check + 1
             final OffsetAndMetadata offsetAndMeta = acked.get(tp).findNextCommitOffset();
             if (offsetAndMeta != null) {
                 kafkaConsumer.seek(tp, offsetAndMeta.offset() + 1);  // seek to starting at the offset that is ready to commit in next commit cycle
@@ -241,7 +240,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     }
 
     // emits one tuple per record
-    private void emitTupleIfNotEmitted(ConsumerRecord<K, V> record) {           TODO Cleanup when to emit
+    private void emitTupleIfNotEmitted(ConsumerRecord<K, V> record) {
         final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
         final KafkaSpoutMessageId msgId = new KafkaSpoutMessageId(record);
 
@@ -249,9 +248,8 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             LOG.trace("Tuple for record [{}] has already been acked. Skipping", record);
         } else if (emitted.contains(msgId)) {
             LOG.trace("Tuple for record [{}] has already been emitted. Skipping", record);
-        } else if {
+        } else if (retryService.retry(msgId)) {
             final List<Object> tuple = tuplesBuilder.buildTuple(record);
-            final KafkaSpoutMessageId msgId = msgId;
             kafkaSpoutStreams.emit(collector, msgId);
             emitted.add(msgId);
             retryService.remove(msgId);
@@ -292,7 +290,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         if (!consumerAutoCommitMode) {  // Only need to keep track of acked tuples if commits are not done automatically
             final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
             acked.get(msgId.getTopicPartition()).add(msgId);
-            emitted.remove(msgId);  TODO is this right?
+            emitted.remove(msgId);
             LOG.trace("Acked message [{}]. Messages acked and pending commit [{}]", msgId, acked);
         }
     }
