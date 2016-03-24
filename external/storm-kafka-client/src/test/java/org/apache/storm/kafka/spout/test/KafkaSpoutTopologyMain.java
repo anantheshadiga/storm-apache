@@ -24,7 +24,7 @@ import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
-import org.apache.storm.kafka.spout.KafkaSpoutExponentialBackoffRetry;
+import org.apache.storm.kafka.spout.KafkaSpoutRetryExponentialBackoff;
 import org.apache.storm.kafka.spout.KafkaSpoutRetryService;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
 import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder;
@@ -96,11 +96,11 @@ public class KafkaSpoutTopologyMain {
     }
 
     private static KafkaSpoutRetryService getRetryService() {
-        return new KafkaSpoutExponentialBackoffRetry(getDelay(5, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE, getDelay(10, TimeUnit.SECONDS));
+        return new KafkaSpoutRetryExponentialBackoff(getDelay(5, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE, getDelay(10, TimeUnit.SECONDS));
     }
 
-    private static KafkaSpoutExponentialBackoffRetry.Delay getDelay(long delay, TimeUnit timeUnit) {
-        return new KafkaSpoutExponentialBackoffRetry.Delay(delay, timeUnit);
+    private static KafkaSpoutRetryExponentialBackoff.Delay getDelay(long delay, TimeUnit timeUnit) {
+        return new KafkaSpoutRetryExponentialBackoff.Delay(delay, timeUnit);
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {

@@ -29,8 +29,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 
-public class KafkaSpoutExponentialBackoffRetry implements KafkaSpoutRetryService {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaSpoutExponentialBackoffRetry.class);
+public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaSpoutRetryExponentialBackoff.class);
     private static final RetryEntryTimeStampComparator RETRY_ENTRY_TIME_STAMP_COMPARATOR = new RetryEntryTimeStampComparator();
 
     // nextRetry = delay + ratio^(failCount - 1)
@@ -130,7 +130,7 @@ public class KafkaSpoutExponentialBackoffRetry implements KafkaSpoutRetryService
      * @param maxRetryDelay maximum amount of time waiting before retrying
      *
      */
-    public KafkaSpoutExponentialBackoffRetry(Delay delay, int ratio, int maxRetries, Delay maxRetryDelay) {
+    public KafkaSpoutRetryExponentialBackoff(Delay delay, int ratio, int maxRetries, Delay maxRetryDelay) {
         this.delay = delay;
         this.ratio = ratio;
         this.maxRetries = maxRetries;
@@ -228,7 +228,7 @@ public class KafkaSpoutExponentialBackoffRetry implements KafkaSpoutRetryService
 
     @Override
     public String toString() {
-        return "KafkaSpoutExponentialBackoffRetry{" +
+        return "KafkaSpoutRetryExponentialBackoff{" +
                 "delay=" + delay +
                 ", ratio=" + ratio +
                 ", maxRetries=" + maxRetries +
