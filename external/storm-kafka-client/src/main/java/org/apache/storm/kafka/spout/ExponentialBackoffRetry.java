@@ -37,10 +37,10 @@ public class ExponentialBackoffRetry implements RetryService {
     private Delay delay;
     private int ratio;
     private int maxRetries;
+    private Delay maxRetryDelay;
 
-//    private Queue<RetrySchedule> entryHeap = new PriorityQueue<>(RETRY_ENTRY_TIME_STAMP_COMPARATOR);
-    private Set<RetrySchedule> retrySchedules = new TreeSet<>(RETRY_ENTRY_TIME_STAMP_COMPARATOR);   //
-    private Set<KafkaSpoutMessageId> failedMsgs = new HashSet<>();  // Messages that have failed
+    private Set<RetrySchedule> retrySchedules = new TreeSet<>(RETRY_ENTRY_TIME_STAMP_COMPARATOR);
+    private Set<KafkaSpoutMessageId> toRetryMsgs = new HashSet<>();      // Convenience data structure to speedup lookups
 
     /**
      * Comparator ordering by timestamp 
@@ -76,17 +76,18 @@ public class ExponentialBackoffRetry implements RetryService {
     }
 
     /**
-     * The time stamp of the next retry is scheduled according to the formula (shifted geometric progression): 
+     * The time stamp of the next retry is scheduled according to the formula (shifted geometric progression):
      * nextRetry = failCount == 1 ? System.nanoTime() + delay + ratio^(failCount-1) : System.nanoTime() + ratio^(failCount-1)
      *
      * @param delay      initial delay
      * @param ratio      ratio of the geometric progression
      * @param maxRetries maximum number a tuple is retried before being set for commit
      */
-    public ExponentialBackoffRetry(Delay delay, int ratio, int maxRetries) {
+    public ExponentialBackoffRetry(Delay delay, int ratio, int maxRetries, Delay maxRetryDelay) {
         this.delay = delay;
         this.ratio = ratio;
         this.maxRetries = maxRetries;
+        this.maxRetryDelay = maxRetryDelay;
     }
 
     @Override
@@ -125,12 +126,12 @@ public class ExponentialBackoffRetry implements RetryService {
 
     @Override
     public boolean remove(KafkaSpoutMessageId msgId) {
-        if (failedMsgs.contains(msgId)) {
+        if (toRetryMsgs.contains(msgId)) {
             for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
                 final RetrySchedule retrySchedule = iterator.next();
                 if (retrySchedule.msgId().equals(msgId)) {
                     iterator.remove();
-                    failedMsgs.remove(msgId);
+                    toRetryMsgs.remove(msgId);
                     LOG.debug("Removed {}", retrySchedule);
                     return true;
                 }
@@ -148,27 +149,28 @@ public class ExponentialBackoffRetry implements RetryService {
         if (msgId.numFails() > maxRetries) {
             LOG.debug("Not scheduling [{}] because reached maximum number of retries [{}].", msgId, maxRetries);
         } else {
-            if (failedMsgs.contains(msgId)) {
+            if (toRetryMsgs.contains(msgId)) {
                 for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
                     final RetrySchedule retrySchedule = iterator.next();
                     if (retrySchedule.msgId().equals(msgId)) {
                         iterator.remove();
-                        failedMsgs.remove(msgId);
+                        toRetryMsgs.remove(msgId);
                     }
                 }
             }
             final RetrySchedule retrySchedule = new RetrySchedule(msgId, nextTime(msgId));
             retrySchedules.add(retrySchedule);
-            failedMsgs.add(msgId);
+            toRetryMsgs.add(msgId);
             LOG.debug("Scheduled. {}", retrySchedule);
         }
     }
 
     // if value is greater than Long.MAX_VALUE it truncates to Long.MAX_VALUE
     private long nextTime(KafkaSpoutMessageId msgId) {
-        return msgId.numFails() == 1
+        final long nexTimeNanos = msgId.numFails() == 1
                 ? (long) (System.nanoTime() + delay.delayNanos() + Math.pow(ratio, msgId.numFails() - 1))
                 : (long) (System.nanoTime() + Math.pow(ratio, msgId.numFails() - 1));
+        return Math.min(nexTimeNanos, maxRetryDelay.delayNanos);
     }
 
 

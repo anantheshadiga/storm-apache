@@ -26,8 +26,9 @@ import org.apache.storm.kafka.spout.ExponentialBackoffRetry;
 import org.apache.storm.kafka.spout.KafkaSpout;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
-import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
+import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder;
 import org.apache.storm.kafka.spout.RetryService;
+import org.apache.storm.kafka.spout.TopicTest2TupleBuilder;
 import org.apache.storm.kafka.spout.TopicsTest0Test1TupleBuilder;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.tuple.Fields;
@@ -82,23 +83,26 @@ public class KafkaSpoutTopologyMain {
 
     public static StormTopology getTopolgyKafkaSpout() {
         final TopologyBuilder tp = new TopologyBuilder();
-        tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(getKafkaSpoutStreams()), getTupleBuilder()), 1);
+        tp.setSpout("kafka_spout", new KafkaSpout<>(getKafkaSpoutConfig(getKafkaSpoutStreams())), 1);
         tp.setBolt("kafka_bolt", new KafkaTestBolt()).shuffleGrouping("kafka_spout", STREAMS[0]);
         tp.setBolt("kafka_bolt_1", new KafkaTestBolt()).shuffleGrouping("kafka_spout", STREAMS[2]);
         return tp.createTopology();
     }
 
     public static KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams, getTupleBuilder(), getRetryService())
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams, getTuplesBuilder(), getRetryService())
                 .setOffsetCommitPeriodMs(10_000)
                 .setFirstPollOffsetStrategy(EARLIEST)
-                .setPollStrategy(STREAM)
                 .setMaxUncommittedOffsets(250)
                 .build();
     }
 
     private static RetryService getRetryService() {
-        return new ExponentialBackoffRetry(new ExponentialBackoffRetry.Delay(2, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE);
+        return new ExponentialBackoffRetry(getDelay(5, TimeUnit.MILLISECONDS), 2, Integer.MAX_VALUE, getDelay(10, TimeUnit.SECONDS));
+    }
+
+    private static ExponentialBackoffRetry.Delay getDelay(long delay, TimeUnit timeUnit) {
+        return new ExponentialBackoffRetry.Delay(delay, timeUnit);
     }
 
     public static Map<String,Object> getKafkaConsumerProps() {
@@ -111,8 +115,11 @@ public class KafkaSpoutTopologyMain {
         return props;
     }
 
-    public static KafkaSpoutTupleBuilder<String,String> getTupleBuilder() {
-        return new TopicsTest0Test1TupleBuilder<>();
+    public static KafkaSpoutTuplesBuilder getTuplesBuilder() {
+        return new KafkaSpoutTuplesBuilder.Builder(
+                new TopicsTest0Test1TupleBuilder<>(TOPICS[0], TOPICS[1]),
+                new TopicTest2TupleBuilder<>(TOPICS[2]))
+                .build();
     }
 
     public static KafkaSpoutStreams getKafkaSpoutStreams() {
