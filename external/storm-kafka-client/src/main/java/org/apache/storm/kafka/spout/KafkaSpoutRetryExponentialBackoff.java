@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -177,21 +178,41 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
 
     @Override
     public boolean remove(KafkaSpoutMessageId msgId) {
+        boolean removed = false;
         if (toRetryMsgs.contains(msgId)) {
             for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
                 final RetrySchedule retrySchedule = iterator.next();
                 if (retrySchedule.msgId().equals(msgId)) {
                     iterator.remove();
                     toRetryMsgs.remove(msgId);
-                    LOG.debug("Removed {}", retrySchedule);
-                    LOG.trace("Current state {}", retrySchedules);
-                    return true;
+                    removed = true;
+                    break;
                 }
             }
         }
-        LOG.debug("Not found {}", msgId);
+        LOG.debug(removed ? "Removed {} " : "Not removed {}", msgId);
         LOG.trace("Current state {}", retrySchedules);
-        return false;
+        return removed;
+    }
+
+    @Override
+    public boolean remove(Collection<TopicPartition> topicPartitions) {
+        boolean result = false;
+        for (TopicPartition tp : topicPartitions) {
+            for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
+                final RetrySchedule retrySchedule = iterator.next();
+                final KafkaSpoutMessageId msgId = retrySchedule.msgId;
+                final TopicPartition tpSched = new TopicPartition(msgId.topic(), msgId.partition());
+                if (!tpSched.equals(tp)) {
+                    iterator.remove();
+                    toRetryMsgs.remove(msgId);
+                    LOG.debug("Removed {}", retrySchedule);
+                    LOG.trace("Current state {}", retrySchedules);
+                    result = true;
+                }
+            }
+        }
+        return result;
     }
 
     /**

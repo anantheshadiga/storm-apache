@@ -105,9 +105,10 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
         if (!consumerAutoCommitMode) {     // If it is auto commit, no need to commit offsets manually
             commitTimer = new Timer(500, kafkaSpoutConfig.getOffsetsCommitPeriodMs(), TimeUnit.MILLISECONDS);
-            acked = new HashMap<>();
-            emitted = new HashSet<>();
         }
+
+        acked = new HashMap<>();
+        emitted = new HashSet<>();
 
         LOG.info("Kafka Spout opened with the following configuration: {}", kafkaSpoutConfig);
     }
@@ -137,6 +138,8 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             if (!consumerAutoCommitMode) {
                 acked.keySet().retainAll(partitions);   // remove from acked all partitions that are no longer assigned to this spout
             }
+
+            retryService.remove(partitions);
 
             for (TopicPartition tp : partitions) {
                 final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
@@ -207,9 +210,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // always poll in auto commit mode because no state is kept and therefore there is no need to set an upper limit in memory
     private boolean poll() {
-        return consumerAutoCommitMode
-                || waitingToEmit != null && !waitingToEmit.hasNext()
-                    && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
+        return waitingToEmit != null && !waitingToEmit.hasNext() && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
     }
 
     private boolean commit() {
@@ -231,9 +232,9 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         for (TopicPartition tp : topicPartitions) {
             final OffsetAndMetadata offsetAndMeta = acked.get(tp).findNextCommitOffset();
             if (offsetAndMeta != null) {
-                kafkaConsumer.seek(tp, offsetAndMeta.offset() + 1);  // seek to starting at the offset that is ready to commit in next commit cycle
+                kafkaConsumer.seek(tp, offsetAndMeta.offset() + 1);  // seek to the next offset that is ready to commit in next commit cycle
             } else {
-                kafkaConsumer.seekToEnd(tp);    // Seek starting at last committed offset
+                kafkaConsumer.seekToEnd(tp);    // Seek to last committed offset
             }
         }
     }
@@ -286,12 +287,12 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     @Override
     public void ack(Object messageId) {
+        final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
         if (!consumerAutoCommitMode) {  // Only need to keep track of acked tuples if commits are not done automatically
-            final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
             acked.get(msgId.getTopicPartition()).add(msgId);
-            emitted.remove(msgId);
             LOG.trace("Acked message [{}]. Messages acked and pending commit [{}]", msgId, acked);
         }
+        emitted.remove(msgId);
     }
 
     // ======== Fail =======
@@ -299,10 +300,10 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
     @Override
     public void fail(Object messageId) {
         final KafkaSpoutMessageId msgId = (KafkaSpoutMessageId) messageId;
+        emitted.remove(msgId);
         if (msgId.numFails() < maxRetries) {
             msgId.incrementNumFails();
             retryService.schedule(msgId);
-            LOG.trace("Retried tuple with message id [{}]", msgId);
         } else { // limit to max number of retries
             LOG.debug("Reached maximum number of retries. Message [{}] being marked as acked.", msgId);
             ack(msgId);

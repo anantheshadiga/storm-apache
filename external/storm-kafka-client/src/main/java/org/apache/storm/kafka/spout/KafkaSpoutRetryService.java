@@ -21,6 +21,7 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Set;
 
 public interface KafkaSpoutRetryService extends Serializable {
@@ -36,6 +37,14 @@ public interface KafkaSpoutRetryService extends Serializable {
      * @param msgId message to remove from retrial
      */
     boolean remove(KafkaSpoutMessageId msgId);
+
+    /**
+     * Removes all the messages that do not belong to one of the specified {@link TopicPartition}.
+     * This method is useful to cleanup state following partition rebalance.
+     * @param topicPartitions {@link TopicPartition} for which to remove messages
+     * @return true if at last one message was removed. false otherwise
+     */
+    boolean remove(Collection<TopicPartition> topicPartitions);
 
     /**
      * @return set of topic partitions that have offsets that are ready to be retried, i.e.,
