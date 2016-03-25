@@ -37,6 +37,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
@@ -74,7 +75,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     private transient Map<TopicPartition, OffsetEntry> acked;         // emitted tuples that were successfully acked. These tuples will be committed periodically when the commit timer expires, after consumer rebalance, or on close/deactivate
     private transient Set<KafkaSpoutMessageId> emitted;               // Tuples that have been emitted but that are pending being acked or failed
-    private transient Iterator<ConsumerRecord<K, V>> waitingToEmit;   // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
+    private transient List<ConsumerRecord<K, V>> waitingToEmit;   // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
     // Initialization is only complete after the first call to  KafkaSpoutConsumerRebalanceListener.onPartitionsAssigned()
     private transient long numUncommittedOffsets;                     // Number of offsets that have been polled and emitted but not yet been committed
 
@@ -109,6 +110,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
         acked = new HashMap<>();
         emitted = new HashSet<>();
+        waitingToEmit = new LinkedList<>();
 
         LOG.info("Kafka Spout opened with the following configuration: {}", kafkaSpoutConfig);
     }
@@ -196,27 +198,38 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             }
 
             if (poll()) {
-                waitingToEmit = pollKafkaBroker().iterator();
+                setWaitingToEmit(pollKafkaBroker());
             }
 
-            if(waitingToEmit!=null && waitingToEmit.hasNext()) {
-                emitTupleIfNotEmitted(waitingToEmit.next());
-                waitingToEmit.remove();
+            if (waitingToEmit()) {
+                emit();
             }
         } else {
             LOG.debug("Spout not initialized. Not sending tuples until initialization completes");
         }
     }
 
-    // always poll in auto commit mode because no state is kept and therefore there is no need to set an upper limit in memory
-    private boolean poll() {
-        return waitingToEmit == null || !waitingToEmit.hasNext() && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
-    }
-
     private boolean commit() {
         return !consumerAutoCommitMode && commitTimer.isExpiredResetOnTrue();    // timer != null for non auto commit mode
     }
 
+    private boolean poll() {
+        return !waitingToEmit() && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
+    }
+
+    private boolean waitingToEmit() {
+        return waitingToEmit != null && !waitingToEmit.isEmpty();
+    }
+
+    public void setWaitingToEmit(ConsumerRecords<K,V> consumerRecords) {
+        waitingToEmit = new LinkedList<>();
+        for (TopicPartition tp : consumerRecords.partitions()) {
+            waitingToEmit.addAll(consumerRecords.records(tp));
+        }
+        LOG.trace("Records waiting to be emitted {}", waitingToEmit);
+    }
+
+    // ======== poll =========
     private ConsumerRecords<K, V> pollKafkaBroker() {
         doSeekFailedTopicPartitions();
 
@@ -236,6 +249,14 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             } else {
                 kafkaConsumer.seekToEnd(tp);    // Seek to last committed offset
             }
+        }
+    }
+
+    // ======== emit  =========
+    private void emit() {
+        for (Iterator<ConsumerRecord<K, V>> iterator = waitingToEmit.iterator(); iterator.hasNext(); ) {
+            emitTupleIfNotEmitted(iterator.next());
+            iterator.remove();
         }
     }
 
