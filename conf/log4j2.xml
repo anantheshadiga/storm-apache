@@ -19,14 +19,19 @@
 <configuration monitorInterval="60">
   <Appenders>
     <Console name="Console" target="SYSTEM_OUT">
-     <PatternLayout pattern="%-4r [%t] %-5p %c{1.} - %msg%n"/>
+     <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5p %c{1.} - %msg%n"/>
     </Console>
   </Appenders>
   <Loggers>
-    <Logger name="org.apache.zookeeper" level="WARN"/>
-    <Root level="info">
+    <Logger name="org.apache.zookeeper" level="OFF"/>
+    <Root level="ERROR">
       <AppenderRef ref="Console"/>
     </Root>
+    <Logger name="org.apache.storm.kafka.spout.KafkaSpout" level="TRACE"/>
+    <Logger name="org.apache.storm.kafka.spout.test.KafkaSpoutTestBolt" level="TRACE"/>
+    <Logger name="org.apache.storm.kafka.spout.KafkaSpoutStreams" level="TRACE"/>
+    <Logger name="org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder" level="TRACE"/>
+    <Logger name="org.apache.storm.kafka.spout.KafkaSpoutRetryExponentialBackoff" level="TRACE"/>
   </Loggers>
 </configuration>
 

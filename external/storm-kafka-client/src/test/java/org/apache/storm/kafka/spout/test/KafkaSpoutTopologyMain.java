@@ -41,8 +41,8 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST;
 
 public class KafkaSpoutTopologyMain {
-    private static final String[] STREAMS = new String[]{"test0_stream","test1_stream","test2_stream"};
-    private static final String[] TOPICS = new String[]{"test0","test1","test2"};
+    private static final String[] STREAMS = new String[]{"test_stream","test1_stream","test2_stream"};
+    private static final String[] TOPICS = new String[]{"test","test1","test2"};
 
 
     public static void main(String[] args) throws Exception {
@@ -123,8 +123,8 @@ public class KafkaSpoutTopologyMain {
     public static KafkaSpoutStreams getKafkaSpoutStreams() {
         final Fields outputFields = new Fields("topic", "partition", "offset", "key", "value");
         final Fields outputFields1 = new Fields("topic", "partition", "offset");
-        return new KafkaSpoutStreams.Builder(outputFields, STREAMS[0], new String[]{TOPICS[0], TOPICS[1]})  // contents of topics test0, test1, sent to test0_stream
-                .addStream(outputFields, STREAMS[0], new String[]{TOPICS[2]})  // contents of topic test2 sent to test0_stream
+        return new KafkaSpoutStreams.Builder(outputFields, STREAMS[0], new String[]{TOPICS[0], TOPICS[1]})  // contents of topics test, test1, sent to test_stream
+                .addStream(outputFields, STREAMS[0], new String[]{TOPICS[2]})  // contents of topic test2 sent to test_stream
                 .addStream(outputFields1, STREAMS[2], new String[]{TOPICS[2]})  // contents of topic test2 sent to test2_stream
                 .build();
     }

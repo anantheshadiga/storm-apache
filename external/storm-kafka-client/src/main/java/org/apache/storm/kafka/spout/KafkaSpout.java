@@ -265,16 +265,18 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         final TopicPartition tp = new TopicPartition(record.topic(), record.partition());
         final KafkaSpoutMessageId msgId = new KafkaSpoutMessageId(record);
 
-        if (acked.containsKey(tp) && acked.get(tp).contains(msgId)) {
+        if (acked.containsKey(tp) && acked.get(tp).contains(msgId)) {   // has been acked
             LOG.trace("Tuple for record [{}] has already been acked. Skipping", record);
-        } else if (emitted.contains(msgId)) {
+        } else if (emitted.contains(msgId)) {   // has been emitted and it's pending ack or fail
             LOG.trace("Tuple for record [{}] has already been emitted. Skipping", record);
-        } else if (retryService.retry(msgId)) {
+        } else if (!retryService.scheduled(msgId) || retryService.retry(msgId)) {   // not scheduled <=> never failed (i.e. never emitted) or ready to be retried
             final List<Object> tuple = tuplesBuilder.buildTuple(record);
             kafkaSpoutStreams.emit(collector, tuple, msgId);
             emitted.add(msgId);
-            retryService.remove(msgId);
             numUncommittedOffsets++;
+            if (retryService.retry(msgId)) { // has failed. Is it ready for retry ?
+                retryService.remove(msgId);  // re-emitted hence remove from failed
+            }
             LOG.trace("Emitted tuple [{}] for record [{}]", tuple, record);
         }
     }
@@ -401,7 +403,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             this.tp = tp;
             this.initialFetchOffset = initialFetchOffset;
             this.committedOffset = initialFetchOffset - 1;
-            LOG.debug("Created OffsetEntry. {}", this);
+            LOG.debug("Instantiated {}", this);
         }
 
         public void add(KafkaSpoutMessageId msgId) {          // O(Log N)

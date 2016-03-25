@@ -35,6 +35,7 @@ public class KafkaSpoutTuplesBuilder<K,V> implements Serializable {
 
     private KafkaSpoutTuplesBuilder(Builder<K,V> builder) {
         this.topicToTupleBuilders = builder.topicToTupleBuilders;
+        LOG.debug("Instantiated {}", this);
     }
 
     public static class Builder<K,V> {
@@ -59,7 +60,6 @@ public class KafkaSpoutTuplesBuilder<K,V> implements Serializable {
                     }
                 }
             }
-            LOG.debug("Built {}", this);
             return new KafkaSpoutTuplesBuilder<>(this);
         }
     }

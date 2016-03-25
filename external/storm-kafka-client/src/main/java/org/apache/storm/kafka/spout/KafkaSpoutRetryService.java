@@ -26,11 +26,10 @@ import java.util.Set;
 
 public interface KafkaSpoutRetryService extends Serializable {
     /**
-     * Schedule a message for retrial according to the retrial policy specified
+     * Schedules this {@link KafkaSpoutMessageId} if not yet scheduled, or updates retry time if it has already been scheduled.
      * @param msgId message to schedule for retrial
      */
     void schedule(KafkaSpoutMessageId msgId);
-
 
     /**
      * Removes a message from the list of messages scheduled for retrial
@@ -39,19 +38,19 @@ public interface KafkaSpoutRetryService extends Serializable {
     boolean remove(KafkaSpoutMessageId msgId);
 
     /**
-     * Removes all the messages that do not belong to one of the specified {@link TopicPartition}.
+     * Removes all the messages whose {@link TopicPartition} does NOT belong to the specified {@code Collection<TopicPartition>}.
+     * All messages that come from a {@link TopicPartition} existing in the collection will be kept.
      * This method is useful to cleanup state following partition rebalance.
-     * @param topicPartitions {@link TopicPartition} for which to remove messages
-     * @return true if at last one message was removed. false otherwise
+     * @param topicPartitions Collection of {@link TopicPartition} for which to keep messages
+     * @return true if at least one message was removed, false otherwise
      */
     boolean remove(Collection<TopicPartition> topicPartitions);
 
     /**
      * @return set of topic partitions that have offsets that are ready to be retried, i.e.,
-     * that failed, and whose retry time is less than current time
+     * for which a tuple has failed and has retry time less than current time
      */
     Set<TopicPartition> topicPartitions();
-
 
     /**
      * Checks if a specific failed {@link KafkaSpoutMessageId} is is ready to be retried,
@@ -59,4 +58,12 @@ public interface KafkaSpoutRetryService extends Serializable {
      * @return true if message is ready to be retried, false otherwise
      */
     boolean retry(KafkaSpoutMessageId msgId);
+
+    /**
+     * Checks if a specific failed {@link KafkaSpoutMessageId} is scheduled to be retried.
+     * The message may or may not be ready to be retried yet.
+     * @return true if the message is scheduled to be retried, regardless of being or not ready to be retried.
+     * Returns false is this message is not scheduled for retrial
+     */
+    boolean scheduled(KafkaSpoutMessageId msgId);
 }

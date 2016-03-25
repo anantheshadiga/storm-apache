@@ -137,7 +137,7 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
         this.ratio = ratio;
         this.maxRetries = maxRetries;
         this.maxRetryDelay = maxRetryDelay;
-        LOG.debug("Created {}", this);
+        LOG.debug("Instantiated {}", this);
     }
 
     @Override
@@ -145,11 +145,11 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
         final Set<TopicPartition> tps = new TreeSet<>();
         final long currentTimeNanos = System.nanoTime();
         for (RetrySchedule retrySchedule : retrySchedules) {
-            if (retrySchedule.nextRetryTimeNanos <  currentTimeNanos) {
+            if (retrySchedule.retry(currentTimeNanos)) {
                 final KafkaSpoutMessageId msgId = retrySchedule.msgId;
                 tps.add(new TopicPartition(msgId.topic(), msgId.partition()));
             } else {
-                break;  // Stop search as soon passed current time
+                break;  // Stop searching as soon as passed current time
             }
         }
         LOG.debug("Topic partitions with entries ready to be retried [{}] ", tps);
@@ -169,11 +169,16 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
                     }
                 } else {
                     LOG.debug("Entry to retry not found {}", retrySchedule);
-                    break;
+                    break;  // Stop searching as soon as passed current time
                 }
             }
         }
         return retry;
+    }
+
+    @Override
+    public boolean scheduled(KafkaSpoutMessageId msgId) {
+        return toRetryMsgs.contains(msgId);
     }
 
     @Override
@@ -198,26 +203,21 @@ public class KafkaSpoutRetryExponentialBackoff implements KafkaSpoutRetryService
     @Override
     public boolean remove(Collection<TopicPartition> topicPartitions) {
         boolean result = false;
-        for (TopicPartition tp : topicPartitions) {
-            for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
-                final RetrySchedule retrySchedule = iterator.next();
-                final KafkaSpoutMessageId msgId = retrySchedule.msgId;
-                final TopicPartition tpSched = new TopicPartition(msgId.topic(), msgId.partition());
-                if (!tpSched.equals(tp)) {
-                    iterator.remove();
-                    toRetryMsgs.remove(msgId);
-                    LOG.debug("Removed {}", retrySchedule);
-                    LOG.trace("Current state {}", retrySchedules);
-                    result = true;
-                }
+        for (Iterator<RetrySchedule> iterator = retrySchedules.iterator(); iterator.hasNext(); ) {
+            final RetrySchedule retrySchedule = iterator.next();
+            final KafkaSpoutMessageId msgId = retrySchedule.msgId;
+            final TopicPartition tpRetry= new TopicPartition(msgId.topic(), msgId.partition());
+            if (!topicPartitions.contains(tpRetry)) {
+                iterator.remove();
+                toRetryMsgs.remove(msgId);
+                LOG.debug("Removed {}", retrySchedule);
+                LOG.trace("Current state {}", retrySchedules);
+                result = true;
             }
         }
         return result;
     }
 
-    /**
-     * Schedules this {@link KafkaSpoutMessageId} if not yet scheduled, or updates retry time if it has already been scheduled.
-     */
     @Override
     public void schedule(KafkaSpoutMessageId msgId) {
         if (msgId.numFails() > maxRetries) {
