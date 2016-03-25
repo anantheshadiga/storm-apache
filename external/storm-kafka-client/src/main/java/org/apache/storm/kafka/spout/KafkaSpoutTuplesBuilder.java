@@ -19,6 +19,8 @@
 package org.apache.storm.kafka.spout;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -27,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 
 public class KafkaSpoutTuplesBuilder<K,V> implements Serializable {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaSpoutTuplesBuilder.class);
+
     private Map<String, KafkaSpoutTupleBuilder<K, V>> topicToTupleBuilders;
 
     private KafkaSpoutTuplesBuilder(Builder<K,V> builder) {
@@ -55,6 +59,7 @@ public class KafkaSpoutTuplesBuilder<K,V> implements Serializable {
                     }
                 }
             }
+            LOG.debug("Built {}", this);
             return new KafkaSpoutTuplesBuilder<>(this);
         }
     }
@@ -62,5 +67,12 @@ public class KafkaSpoutTuplesBuilder<K,V> implements Serializable {
     public List<Object>buildTuple(ConsumerRecord<K,V> consumerRecord) {
         final String topic = consumerRecord.topic();
         return topicToTupleBuilders.get(topic).buildTuple(consumerRecord);
+    }
+
+    @Override
+    public String toString() {
+        return "KafkaSpoutTuplesBuilder{" +
+                "topicToTupleBuilders=" + topicToTupleBuilders +
+                '}';
     }
 }

@@ -199,7 +199,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
                 waitingToEmit = pollKafkaBroker().iterator();
             }
 
-            if(waitingToEmit.hasNext()) {
+            if(waitingToEmit!=null && waitingToEmit.hasNext()) {
                 emitTupleIfNotEmitted(waitingToEmit.next());
                 waitingToEmit.remove();
             }
@@ -210,7 +210,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     // always poll in auto commit mode because no state is kept and therefore there is no need to set an upper limit in memory
     private boolean poll() {
-        return waitingToEmit != null && !waitingToEmit.hasNext() && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
+        return waitingToEmit == null || !waitingToEmit.hasNext() && numUncommittedOffsets < kafkaSpoutConfig.getMaxUncommittedOffsets();
     }
 
     private boolean commit() {
