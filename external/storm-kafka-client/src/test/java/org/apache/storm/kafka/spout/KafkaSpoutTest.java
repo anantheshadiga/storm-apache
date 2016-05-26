@@ -16,17 +16,15 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.kafka.spout.test.unit;
+package org.apache.storm.kafka.spout;
 
-import org.apache.storm.kafka.spout.KafkaSpout;
-import org.apache.storm.kafka.spout.KafkaSpoutConfig;
-import org.apache.storm.kafka.spout.Timer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.util.NavigableSet;
 
 import mockit.Deencapsulation;
 import mockit.Expectations;
@@ -74,7 +72,7 @@ public class KafkaSpoutTest {
             return false;
         }
 
-//        private class OffsetEntryMock extends MockUp<KafkaSpout.OffsetEntry >
+
 
     }
 
@@ -82,16 +80,33 @@ public class KafkaSpoutTest {
         System.out.println("bla");
     }
 
-    class C1 {
-        List<String> ls = new LinkedList<>();
+    @Tested KafkaSpout.OffsetEntry offsetEntry;
+
+    private class OffsetEntryMock extends MockUp<KafkaSpout.OffsetEntry> {
+        @Mock
+        void $init(Invocation invocation, TopicPartition tp, long initialFetchOffset) {
+            KafkaSpout.OffsetEntry entry = invocation.getInvokedInstance();
+//            Deencapsulation.setField(entry, "ackedMsgs", );
+        }
+
     }
 
-    @Tested C1 c1;
-
     @Test
-    public void testC1(@Injectable(new LinkedList<>()) List<String> ls) throws Exception {
+    public void testOffsetEntry(@Injectable final KafkaSpout<String, String> ks,
+                                @Injectable TopicPartition tp,
+                                @Injectable("0") long initialFetchOffset,
+                                @Injectable final NavigableSet<KafkaSpoutMessageId> ackedMsgs,
+                                @Injectable final KafkaSpoutMessageId kafkaSpoutMessageId) throws Exception {
+        new Expectations() {{
+            kafkaSpoutMessageId.offset(); returns(0, 1, 2, 4, 5);
+            ackedMsgs.iterator().hasNext(); returns(true, false);
+            ackedMsgs.iterator().next(); returns(kafkaSpoutMessageId);
+        }};
 
+        OffsetAndMetadata actual = offsetEntry.findNextCommitOffset();
+        OffsetAndMetadata expected = new OffsetAndMetadata(2);
 
+        Assert.assertEquals(expected, actual);
     }
 
     @Test
