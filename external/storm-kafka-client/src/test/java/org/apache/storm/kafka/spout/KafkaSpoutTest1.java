@@ -140,11 +140,12 @@ public class KafkaSpoutTest1 {
                                 @Injectable final KafkaSpoutMessageId kafkaSpoutMessageId,
                                 @Injectable final Iterator<KafkaSpoutMessageId> iterator) throws Exception {
 
-        OffsetEntry offsetEntry = new OffsetEntry(tp, initialFetchOffset, ackedMsgs);
+//        OffsetEntry offsetEntry = new OffsetEntry(tp, initialFetchOffset, ackedMsgs);
 
-        new Expectations() {{
+        new Expectations(ackedMsgs) {{
 //            new TreeSet<>(OffsetEntry.OFFSET_COMPARATOR);
-            new TreeSet<>(OffsetEntry.OFFSET_COMPARATOR); result = ackedMsgs;
+//            new TreeSet<KafkaSpoutMessageId>(OffsetEntry.OFFSET_COMPARATOR); result = ackedMsgs;
+            new TreeSet<KafkaSpoutMessageId>(); result = ackedMsgs;
 
             ackedMsgs.iterator(); result = iterator;
 

@@ -18,7 +18,6 @@
 
 package org.apache.storm.kafka.spout;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Assert;
 import org.junit.Test;
@@ -80,7 +79,7 @@ public class KafkaSpoutTest {
         System.out.println("bla");
     }
 
-    @Tested KafkaSpout.OffsetEntry offsetEntry;
+    /*@Tested KafkaSpout.OffsetEntry offsetEntry;
 
     private class OffsetEntryMock extends MockUp<KafkaSpout.OffsetEntry> {
         @Mock
@@ -89,7 +88,7 @@ public class KafkaSpoutTest {
 //            Deencapsulation.setField(entry, "ackedMsgs", );
         }
 
-    }
+    }*/
 
     @Test
     public void testOffsetEntry(@Injectable final KafkaSpout<String, String> ks,
@@ -103,15 +102,15 @@ public class KafkaSpoutTest {
             ackedMsgs.iterator().next(); returns(kafkaSpoutMessageId);
         }};
 
-        OffsetAndMetadata actual = offsetEntry.findNextCommitOffset();
+        /*OffsetAndMetadata actual = offsetEntry.findNextCommitOffset();
         OffsetAndMetadata expected = new OffsetAndMetadata(2);
 
-        Assert.assertEquals(expected, actual);
+        Assert.assertEquals(expected, actual);*/
     }
 
     @Test
-//    public void testMock(@Injectable("true") boolean initialized) {
-    public void testMock() {
+    public void testMock(@Injectable("true") boolean initialized) {
+//    public void testMock() {
         KafkaSpoutMock kafkaSpout1 = new KafkaSpoutMock();
 
         final boolean initialized1 = Deencapsulation.getField(kafkaSpout, "initialized");
