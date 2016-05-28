@@ -77,7 +77,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
 
     private transient Map<TopicPartition, OffsetEntry> acked;           // Tuples that were successfully acked. These tuples will be committed periodically when the commit timer expires, after consumer rebalance, or on close/deactivate
     private transient Set<KafkaSpoutMessageId> emitted;                 // Tuples that have been emitted but that are "on the wire", i.e. pending being acked or failed
-    private transient Iterator<ConsumerRecord<K, V>> waitingToEmit;         // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
+    private transient Iterator<ConsumerRecord<K, V>> waitingToEmit;     // Records that have been polled and are queued to be emitted in the nextTuple() call. One record is emitted per nextTuple()
     private transient long numUncommittedOffsets;                       // Number of offsets that have been polled and emitted but not yet been committed
 
 
@@ -241,15 +241,16 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         return consumerRecords;
     }
 
+    // Makes KafkaConsumer seek the appropriate offset for the topic partitions for which there were fails
     private void doSeekRetriableTopicPartitions() {
         final Set<TopicPartition> retriableTopicPartitions = retryService.retriableTopicPartitions();
 
         for (TopicPartition rtp : retriableTopicPartitions) {
             final OffsetAndMetadata offsetAndMeta = acked.get(rtp).findNextCommitOffset();
             if (offsetAndMeta != null) {
-                kafkaConsumer.seek(rtp, offsetAndMeta.offset() + 1);  // seek to the next offset that is ready to commit in next commit cycle
-            } else {
-                kafkaConsumer.seekToEnd(rtp);    // Seek to last committed offset
+                kafkaConsumer.seek(rtp, offsetAndMeta.offset() + 1);  // seek to the next offset that is ready to commit in next commit cycle.
+            } else {                                                  // No need to poll all the offsets that have been acked and hence will be committed in the next commit call
+                kafkaConsumer.seek(rtp, acked.get(rtp).committedOffset);    // Seek to last committed offset
             }
         }
     }
@@ -269,14 +270,17 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             LOG.trace("Tuple for record [{}] has already been acked. Skipping", record);
         } else if (emitted.contains(msgId)) {   // has been emitted and it's pending ack or fail
             LOG.trace("Tuple for record [{}] has already been emitted. Skipping", record);
-        } else if (!retryService.isScheduled(msgId) || retryService.isReady(msgId)) {   // not scheduled <=> never failed (i.e. never emitted) or ready to be retried
+        } else if (!retryService.isScheduled(msgId) || retryService.isReady(msgId)) {   // not scheduled <=> never failed (<=>. never emitted) or ready to be retried
             final List<Object> tuple = tuplesBuilder.buildTuple(record);
             kafkaSpoutStreams.emit(collector, tuple, msgId);
             emitted.add(msgId);
-            numUncommittedOffsets++;
+
             if (retryService.isReady(msgId)) { // has failed. Is it ready for retry ?
                 retryService.remove(msgId);  // re-emitted hence remove from failed
+            } else {
+                numUncommittedOffsets++;
             }
+
             LOG.trace("Emitted tuple [{}] for record [{}]", tuple, record);
         }
     }
@@ -393,7 +397,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
      * This class is not thread safe.
      * Package protected to facilitate unit testing
      */
-    class OffsetEntry {
+    private class OffsetEntry {
         private final TopicPartition tp;
         private final long initialFetchOffset;  /* First offset to be fetched. It is either set to the beginning, end, or to the first uncommitted offset.
                                                  * Initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener */
