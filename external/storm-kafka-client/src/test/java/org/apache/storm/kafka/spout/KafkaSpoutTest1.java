@@ -24,13 +24,18 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.NavigableSet;
+import java.util.Set;
 import java.util.TreeSet;
 
 import mockit.Expectations;
 import mockit.Injectable;
+import mockit.Invocation;
+import mockit.MockUp;
 import mockit.Tested;
+import mockit.Verifications;
 import mockit.integration.junit4.JMockit;
 
 @RunWith(JMockit.class)
@@ -60,7 +65,9 @@ public class KafkaSpoutTest1 {
                                 @Injectable final Iterator<KafkaSpoutMessageId> iterator) throws Exception {
         new Expectations() {{
             ackedMsgs.iterator(); result = iterator;
+        }};
 
+        new Expectations() {{
             kafkaSpoutMessageId.offset(); returns(0L, 1L, 2L, 3L, 4L, 5L, 9L, 10L);
             kafkaSpoutMessageId.getMetadata(Thread.currentThread()); result = "";
 
@@ -163,5 +170,36 @@ public class KafkaSpoutTest1 {
         OffsetAndMetadata expected = new OffsetAndMetadata(2);
 
         Assert.assertEquals(expected, actual);
+    }
+
+    private static class ClassWithSet {
+        private Set<Integer> si = new HashSet<>();
+
+        void add(Integer i) {
+            si.add(i);
+        }
+    }
+
+    private class MockUpClassWithSet extends MockUp<ClassWithSet> {
+        private Set<Integer> si = new HashSet<>();
+
+        void add(Invocation invocation, Integer i) {
+            invocation.proceed(i);
+        }
+    }
+
+    @Tested
+    private ClassWithSet classWithSet;
+
+    @Test
+    public void testCWS(@Injectable final Set<Integer> si) throws Exception {
+        classWithSet.add(3);
+
+        new Verifications() {{
+            si.add(anyInt); times = 1;
+        }};
+
+        Assert.assertEquals(1, si.size());
+        Assert.assertEquals((Integer)1, si.iterator().next());
     }
 }

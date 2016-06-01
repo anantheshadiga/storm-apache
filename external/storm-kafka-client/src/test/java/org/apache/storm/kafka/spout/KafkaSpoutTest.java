@@ -18,11 +18,17 @@
 
 package org.apache.storm.kafka.spout;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.NavigableSet;
 
 import mockit.Deencapsulation;
@@ -48,6 +54,22 @@ public class KafkaSpoutTest {
     }
 
     class KafkaSpoutMock extends MockUp<KafkaSpout<String, String>> {
+        private final boolean poll;
+        private final boolean commit;
+        private final boolean waitingToEmit;
+
+        @Injectable
+        private ConsumerRecord<String, String> record;
+
+        @Injectable
+        private KafkaConsumer<String, String> kafkaConsumer;
+
+        public KafkaSpoutMock(boolean poll, boolean commit, boolean waitingToEmit) {
+            this.poll = poll;
+            this.commit = commit;
+            this.waitingToEmit = waitingToEmit;
+        }
+
         @Mock
         void $init(Invocation invocation, KafkaSpoutConfig<String, String> kafkaSpoutConfig) {
             KafkaSpout<String, String> invokedInstance = invocation.getInvokedInstance();
@@ -56,39 +78,68 @@ public class KafkaSpoutTest {
         @Mock
         private boolean poll() {
             System.out.println("Poll called");
-            return false;
+            return poll;
         }
 
         @Mock
         private boolean commit() {
             System.out.println("Commit called");
-            return false;
+            return commit;
         }
 
         @Mock
         private boolean waitingToEmit() {
             System.out.println("waitingToEmit called");
-            return false;
+            return waitingToEmit;
         }
 
-
-
-    }
-
-    public static void main(String[] args) {
-        System.out.println("bla");
-    }
-
-    /*@Tested KafkaSpout.OffsetEntry offsetEntry;
-
-    private class OffsetEntryMock extends MockUp<KafkaSpout.OffsetEntry> {
         @Mock
-        void $init(Invocation invocation, TopicPartition tp, long initialFetchOffset) {
-            KafkaSpout.OffsetEntry entry = invocation.getInvokedInstance();
-//            Deencapsulation.setField(entry, "ackedMsgs", );
+        private void emitTupleIfNotEmitted(ConsumerRecord<String, String> consumerRecord) {
+
         }
 
-    }*/
+
+
+        @Mock
+        private ConsumerRecords<String, String> pollKafkaBroker() {
+            new Expectations() {{
+
+            }};
+            return null;
+        }
+
+//        @Mock(invocations = 1)
+        @Mock
+        private void emit(Invocation invocation) {
+            System.out.println("emit");
+
+        }
+    }
+
+    private static class MockUpConsumerRecords extends MockUp<ConsumerRecords<String, String>> {
+        @Injectable
+        Map<TopicPartition, List<ConsumerRecord<String, String>>> records;
+
+        @Injectable
+        Iterator<ConsumerRecord<String, String>> iterator;
+
+        @Mock
+        void $init(Map<TopicPartition, List<ConsumerRecord<String, String>>> records) { }
+    }
+
+    @Test
+    public void testEmitNumUncommittedCorrect(@Injectable("true") boolean initialized,
+                @Injectable Iterator<ConsumerRecord<String, String>> waitingToEmit) throws Exception {
+
+//        final KafkaSpoutMock kafkaSpout1 = new KafkaSpoutMock(true, false, true);
+        final KafkaSpoutMock kafkaSpout1 = new KafkaSpoutMock(false, false, false);
+
+        new Expectations(kafkaSpout1) {{
+            kafkaSpout1.waitingToEmit(); result = true;
+        }};
+
+        kafkaSpout.nextTuple();
+    }
 
     @Test
     public void testOffsetEntry(@Injectable final KafkaSpout<String, String> ks,
@@ -111,7 +162,7 @@ public class KafkaSpoutTest {
     @Test
     public void testMock(@Injectable("true") boolean initialized) {
 //    public void testMock() {
-        KafkaSpoutMock kafkaSpout1 = new KafkaSpoutMock();
+        KafkaSpoutMock kafkaSpout1 = new KafkaSpoutMock(false, false, false);
 
         final boolean initialized1 = Deencapsulation.getField(kafkaSpout, "initialized");
         System.out.println("initialized1 = " + initialized1);
