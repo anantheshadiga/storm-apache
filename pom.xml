@@ -251,6 +251,7 @@
         <maven-surefire.version>2.18.1</maven-surefire.version>
         <kafka.version>0.9.0.1</kafka.version>
         <kafka.artifact.id>kafka_2.11</kafka.artifact.id>
+        <jmockit.version>1.22</jmockit.version>
 
         <!-- Java and clojure build lifecycle test properties are defined here to avoid having to create a default profile -->
         <java.unit.test.exclude>org.apache.storm.testing.IntegrationTest</java.unit.test.exclude>
@@ -879,6 +880,12 @@
                 <groupId>uk.org.lidalia</groupId>
                 <artifactId>sysout-over-slf4j</artifactId>
                 <version>${sysout-over-slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.jmockit</groupId>
+                <artifactId>jmockit</artifactId>
+                <version>${jmockit.version}</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
