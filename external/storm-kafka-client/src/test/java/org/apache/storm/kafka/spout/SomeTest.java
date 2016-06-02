@@ -24,6 +24,7 @@ import org.junit.runner.RunWith;
 
 import java.util.Set;
 
+import mockit.Deencapsulation;
 import mockit.Injectable;
 import mockit.Invocation;
 import mockit.Mock;
@@ -47,13 +48,12 @@ public class SomeTest {
         }
 
         @Mock
-        void $clinit()
-        {
+        void $clinit() {
             System.out.println("MockUpClassWithSet.$clinit");
             // Do nothing here (usually).
         }
 
-//        @Mock
+        @Mock
         void add(Invocation invocation, Integer i) {
             System.out.println("MockUpClassWithSet.add");
             invocation.proceed(i);
@@ -64,10 +64,8 @@ public class SomeTest {
 
 
     @Test
-    public void testCWS(/*@Injectable final Set<Integer> si*/) throws Exception {
-        new MockUpClassWithSet();
-
-//    public void testCWS() throws Exception {
+//    public void testCWS(@Injectable final Set<Integer> si) throws Exception {
+    public void testCWSAssert() throws Exception {
         classWithSet.add(3);
 
         /*new Verifications() {{
@@ -78,9 +76,22 @@ public class SomeTest {
             Assert.assertEquals((Integer)3, val);
         }};*/
 
-        /*Set<Integer> si1 = Deencapsulation.getField(classWithSet, "si");
+        Set<Integer> si1 = Deencapsulation.getField(classWithSet, "si");
         Assert.assertEquals(1, si1.size());
-        Assert.assertEquals((Integer)3, si1.iterator().next());*/
+        Assert.assertEquals((Integer) 3, si1.iterator().next());
+    }
+
+    @Test
+    public void testCWSVerify(@Injectable final Set<Integer> si) throws Exception {
+        classWithSet.add(3);
+
+        new Verifications() {{
+            Integer val;
+            si.add(anyInt); times = 1;
+            si.add(val = withCapture()); times = 1;
+//            Integer ni = si.iterator().next();
+            Assert.assertEquals((Integer)3, val);
+        }};
     }
 
     @Test
@@ -92,10 +103,18 @@ public class SomeTest {
 
         new Verifications() {{
             Integer val;
-            si.add(anyInt); times = 1;
-            si.add(val = withCapture()); times = 1;
+            si.add(anyInt);
+            times = 1;
+            si.add(val = withCapture());
+            times = 1;
 //            Integer ni = si.iterator().next();
-            Assert.assertEquals((Integer)3, val);
+            Assert.assertEquals((Integer) 3, val);
         }};
+    }
+
+    @Test
+    public void testCWSMockBasic(@Injectable final Set<Integer> si) throws Exception {
+        new MockUpClassWithSet();
+        classWithSet.add(3);
     }
 }
