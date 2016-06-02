@@ -18,7 +18,6 @@
 
 package org.apache.storm.kafka.spout;
 
-import java.util.HashSet;
 import java.util.Set;
 
 class ClassWithSetWrapper {
@@ -36,16 +35,16 @@ class ClassWithSetWrapper {
     }
 
     class ClassWithSet {
-        private Set<Integer> si = new HashSet<>();
-//        private Set<Integer> si;
+//        private Set<Integer> si = new HashSet<>();
+        private Set<Integer> si;
 
         /*public ClassWithSet(ClassWithSetWrapper classWithSetWrapper, Set<Integer> si) {
             this.si = si;
         }*/
 
-        /*public ClassWithSet(Set<Integer> si) {
+        public ClassWithSet(Set<Integer> si) {
             this.si = si;
-        }*/
+        }
 
         /*static {
             System.out.println("ClassWithSet.static initializer");
@@ -62,14 +61,17 @@ class ClassWithSetWrapper {
     }
 
     private class ClassWithSet1 {
-        private Set<Integer> si = new HashSet<>();
+//        private Set<Integer> si = new HashSet<>();
+        private Set<Integer> si;
+
+
 
         public ClassWithSet1() {
-            System.out.println("ClassWithSet.ClassWithSet");
+            System.out.println("ClassWithSet1.ClassWithSet");
         }
 
         public void add(Integer i) {
-            System.out.println("ClassWithSet.add");
+            System.out.println("ClassWithSet1.add");
             si.add(i);
         }
     }
