@@ -18,10 +18,11 @@
 
 package org.apache.storm.kafka.spout;
 
+import java.util.HashSet;
 import java.util.Set;
 
 class ClassWithSetWrapper {
-    ClassWithSet cws = new ClassWithSet();
+//    ClassWithSet cws = new ClassWithSet(1);
 //    ClassWithSet cws;
 
     /*public ClassWithSetWrapper(ClassWithSet cws) {
@@ -29,30 +30,41 @@ class ClassWithSetWrapper {
         this.cws = cws;
     }*/
 
-    public void add(Integer i) {
+    /*public void add(Integer i) {
         System.out.println("ClassWithSetWrapper.add");
         cws.add(i);
+    }*/
+
+    static class SC {
+
     }
 
     class ClassWithSet {
-//        private Set<Integer> si = new HashSet<>();
-        private Set<Integer> si;
+        private Set<Integer> si = new HashSet<>();
+//        private Set<Integer> si;
 
         /*public ClassWithSet(ClassWithSetWrapper classWithSetWrapper, Set<Integer> si) {
             this.si = si;
         }*/
 
-        public ClassWithSet(Set<Integer> si) {
-            this.si = si;
+        /*public ClassWithSet(int bla) {
+        }*/
+
+        public ClassWithSet(SC bla) {
         }
+
+        /*public ClassWithSet(Set<Integer> si) {
+            System.out.println("ClassWithSet.ClassWithSet");
+            this.si = si;
+        }*/
 
         /*static {
             System.out.println("ClassWithSet.static initializer");
         }*/
 
-        public ClassWithSet() {
+        /*public ClassWithSet() {
             System.out.println("ClassWithSet.ClassWithSet");
-        }
+        }*/
 
         public void add(Integer i) {
             System.out.println("ClassWithSet.add");

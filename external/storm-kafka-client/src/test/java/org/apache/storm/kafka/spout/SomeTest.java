@@ -37,7 +37,6 @@ import mockit.integration.junit4.JMockit;
 public class SomeTest {
     @Tested(availableDuringSetup = false)
     private ClassWithSet classWithSet;
-//    @Capturing Set<Integer> si;
 
     private class MockUpClassWithSet extends MockUp<ClassWithSet> {
 //        private Set<Integer> si = new HashSet<>();
@@ -107,15 +106,31 @@ public class SomeTest {
         classWithSet.add(3);
     }
 
-//    @Tested
-//    ClassWithSetWrapper.ClassWithSet cws;
-
     @Test
-    public void testCWSPackageInner(@Injectable final Set<Integer> si) throws Exception {
+    public void testCWSPackageInnerInstance(@Injectable final Set<Integer> si) throws Exception {
         ClassWithSetWrapper wrapper = new ClassWithSetWrapper();
         ClassWithSetWrapper.ClassWithSet cws = Deencapsulation.newInnerInstance(ClassWithSetWrapper.ClassWithSet.class, wrapper);
         Deencapsulation.setField(cws, si);
 
+        cws.add(3);
+
+        new Verifications() {{
+            Integer val;
+            si.add(anyInt); times = 1;
+            si.add(val = withCapture()); times = 1;
+            Assert.assertEquals((Integer) 3, val);
+        }};
+    }
+
+//    @Tested(availableDuringSetup = true)
+    @Tested(availableDuringSetup = false)
+    ClassWithSetWrapper.ClassWithSet cws;
+
+    @Test
+    public void testCWSPackageInnerTested(@Injectable  ClassWithSetWrapper cwsr, @Injectable final Set<Integer> si,
+                                          /*@Injectable("-1") int i,*/ @Injectable ClassWithSetWrapper.SC bla) throws Exception {
+
+        Deencapsulation.setField(cws, si);
         cws.add(3);
 
         new Verifications() {{
