@@ -29,21 +29,23 @@ import mockit.Injectable;
 import mockit.Invocation;
 import mockit.Mock;
 import mockit.MockUp;
-import mockit.Tested;
+import mockit.Mocked;
 import mockit.Verifications;
 import mockit.integration.junit4.JMockit;
 
 @RunWith(JMockit.class)
 public class SomeTest {
-    @Tested(availableDuringSetup = false)
-    private ClassWithSet classWithSet;
+    /*@Tested
+    private ClassWithSetWrapper classWithSetWrapper;*/
+//    @Tested(availableDuringSetup = false)
+    private ClassWithSetWrapper classWithSet;
 //    @Capturing Set<Integer> si;
 
-    private class MockUpClassWithSet extends MockUp<ClassWithSet> {
+    private class MockUpClassWithSet extends MockUp<ClassWithSetWrapper.ClassWithSet> {
 //        private Set<Integer> si = new HashSet<>();
 
         @Mock
-        void $init() {
+        void $init(/*ClassWithSetWrapper classWithSetWrapper*/) {
             System.out.println("MockUpClassWithSet.$init");
         }
 
@@ -64,17 +66,8 @@ public class SomeTest {
 
 
     @Test
-//    public void testCWS(@Injectable final Set<Integer> si) throws Exception {
     public void testCWSAssert() throws Exception {
         classWithSet.add(3);
-
-        /*new Verifications() {{
-            Integer val;
-            si.add(anyInt); times = 1;
-            si.add(val = withCapture()); times = 1;
-//            Integer ni = si.iterator().next();
-            Assert.assertEquals((Integer)3, val);
-        }};*/
 
         Set<Integer> si1 = Deencapsulation.getField(classWithSet, "si");
         Assert.assertEquals(1, si1.size());
@@ -82,15 +75,34 @@ public class SomeTest {
     }
 
     @Test
-    public void testCWSVerify(@Injectable final Set<Integer> si) throws Exception {
-        classWithSet.add(3);
+    public void testCWSVerify(@Injectable final ClassWithSetWrapper.ClassWithSet cws , @Injectable final Set<Integer> si) throws Exception {
+//        ClassWithSetWrapper classWithSetWrapper = new ClassWithSetWrapper();
+//        classWithSetWrapper.new ClassWithSet();
+
+        this.classWithSet.add(3);
 
         new Verifications() {{
             Integer val;
+            cws.add(anyInt); times = 1;
             si.add(anyInt); times = 1;
-            si.add(val = withCapture()); times = 1;
-//            Integer ni = si.iterator().next();
-            Assert.assertEquals((Integer)3, val);
+//            si.add(val = withCapture()); times = 1;
+//            Assert.assertEquals((Integer)3, val);
+        }};
+    }
+
+    @Test
+    public void testCWSVerifyMocked(@Mocked final ClassWithSetWrapper.ClassWithSet cws , @Mocked final Set<Integer> si) throws Exception {
+
+        ClassWithSetWrapper cwsw = new ClassWithSetWrapper();
+        cwsw.add(3);
+//        classWithSet.add(3);
+
+        new Verifications() {{
+            Integer val;
+            cws.add(anyInt); times = 1;
+            si.add(anyInt); times = 1;
+//            si.add(val = withCapture()); times = 1;
+//            Assert.assertEquals((Integer)3, val);
         }};
     }
 
