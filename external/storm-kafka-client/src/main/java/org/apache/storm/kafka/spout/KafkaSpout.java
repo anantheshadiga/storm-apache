@@ -397,7 +397,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
      * This class is not thread safe.
      * Package protected to facilitate unit testing
      */
-    private class OffsetEntry {
+    class OffsetEntry {
         private final TopicPartition tp;
         private final long initialFetchOffset;  /* First offset to be fetched. It is either set to the beginning, end, or to the first uncommitted offset.
                                                  * Initial value depends on offset strategy. See KafkaSpoutConsumerRebalanceListener */
