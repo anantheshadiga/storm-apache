@@ -161,7 +161,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
             if (committedOffset != null) {             // offset was committed for this TopicPartition
                 if (firstPollOffsetStrategy.equals(EARLIEST)) {
                     kafkaConsumer.seekToBeginning(tp);
-                    fetchOffset = kafkaConsumer.position(tp);
+                    fetchOffset = kafkaConsumer.position(tp);               // TODO Handle InvalidOffsetException
                 } else if (firstPollOffsetStrategy.equals(LATEST)) {
                     kafkaConsumer.seekToEnd(tp);
                     fetchOffset = kafkaConsumer.position(tp);
@@ -407,7 +407,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         public OffsetEntry(TopicPartition tp, long initialFetchOffset) {
             this.tp = tp;
             this.initialFetchOffset = initialFetchOffset;
-            this.committedOffset = initialFetchOffset - 1;
+            this.committedOffset = initialFetchOffset - 1;      //TODO What if initial fetch offset is zero ?
             LOG.debug("Instantiated {}", this);
         }
 
@@ -487,7 +487,7 @@ public class KafkaSpout<K, V> extends BaseRichSpout {
         public String toString() {
             return "OffsetEntry{" +
                     "topic-partition=" + tp +
-                    ", fetchOffset=" + initialFetchOffset +
+                    ", initialFetchOffset=" + initialFetchOffset +
                     ", committedOffset=" + committedOffset +
                     ", ackedMsgs=" + ackedMsgs +
                     '}';
