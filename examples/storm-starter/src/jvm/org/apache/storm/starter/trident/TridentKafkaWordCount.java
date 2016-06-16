@@ -23,15 +23,12 @@
 package org.apache.storm.starter.trident;
 
 
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.LocalDRPC;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
-import org.apache.storm.spout.SchemeAsMultiScheme;
-import org.apache.storm.topology.TopologyBuilder;
-import org.apache.storm.tuple.Fields;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.storm.kafka.StringScheme;
 import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
@@ -39,15 +36,21 @@ import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
 import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
+import org.apache.storm.spout.SchemeAsMultiScheme;
 import org.apache.storm.starter.spout.RandomSentenceSpout;
+import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.trident.Stream;
 import org.apache.storm.trident.TridentState;
 import org.apache.storm.trident.TridentTopology;
 import org.apache.storm.trident.operation.builtin.Count;
+import org.apache.storm.trident.operation.builtin.Debug;
 import org.apache.storm.trident.operation.builtin.FilterNull;
 import org.apache.storm.trident.operation.builtin.MapGet;
 import org.apache.storm.trident.testing.MemoryMapState;
 import org.apache.storm.trident.testing.Split;
+import org.apache.storm.tuple.Fields;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
@@ -73,6 +76,7 @@ import java.util.Properties;
  * </p>
  */
 public class TridentKafkaWordCount {
+    private static final Logger LOG = LoggerFactory.getLogger(TridentKafkaWordCount.class);
 
     private String zkUrl;
     private String brokerUrl;
@@ -112,11 +116,12 @@ public class TridentKafkaWordCount {
     }
 
     private TridentState addTridentState(TridentTopology tridentTopology) {
-        return tridentTopology.newStream("spout1", createKafkaSpout()).parallelismHint(1)
+        final Stream spoutStream = tridentTopology.newStream("spout1", createKafkaSpout()).parallelismHint(1);
+
+        return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))
                 .each(new Fields("str"), new Split(), new Fields("word"))
                 .groupBy(new Fields("word"))
-                .persistentAggregate(new MemoryMapState.Factory(), new Count(), new Fields("count"))
-                .parallelismHint(1);
+                .persistentAggregate(new DebugMemoryMapState.Factory(), new Count(), new Fields("count"));
     }
 
     /**
@@ -152,7 +157,7 @@ public class TridentKafkaWordCount {
      */
     public StormTopology buildProducerTopology(Properties prop) {
         TopologyBuilder builder = new TopologyBuilder();
-        builder.setSpout("spout", new RandomSentenceSpout(), 2);
+        builder.setSpout("spout", new RandomSentenceSpout.TimeStamped("HMCL_"), 2);
         /**
          * The output field of the RandomSentenceSpout ("word") is provided as the boltMessageField
          * so that this gets written out as the message in the kafka topic.
@@ -244,7 +249,8 @@ public class TridentKafkaWordCount {
 
             // keep querying the word counts for a minute.
             for (int i = 0; i < 60; i++) {
-                System.out.println("DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
+                LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
+                System.out.println();
                 Thread.sleep(1000);
             }
 
