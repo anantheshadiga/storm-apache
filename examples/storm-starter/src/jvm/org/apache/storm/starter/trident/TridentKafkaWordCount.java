@@ -157,7 +157,7 @@ public class TridentKafkaWordCount {
      */
     public StormTopology buildProducerTopology(Properties prop) {
         TopologyBuilder builder = new TopologyBuilder();
-        builder.setSpout("spout", new RandomSentenceSpout.TimeStamped("HMCL_"), 2);
+        builder.setSpout("spout", new RandomSentenceSpout.TimeStamped(""), 2);
         /**
          * The output field of the RandomSentenceSpout ("word") is provided as the boltMessageField
          * so that this gets written out as the message in the kafka topic.

@@ -53,8 +53,7 @@ public class DebugMemoryMapState<T> extends MemoryMapState<T> {
         for (int i = 0; i < keys.size(); i++) {
             ValueUpdater valueUpdater = updaters.get(i);
             Object arg = ((CombinerValueUpdater) valueUpdater).getArg();
-            LOG.debug("updateCount = {}, keys = {} => updater_args = {}", updateCount, keys.get(i), arg);
-//            System.out.printf("updateCount = %d, keys = %s => updater_args = %s\n", updateCount, keys.get(i), arg);
+            LOG.debug("updateCount = {}, keys = {} => updaterArgs = {}", updateCount, keys.get(i), arg);
         }
     }
 
