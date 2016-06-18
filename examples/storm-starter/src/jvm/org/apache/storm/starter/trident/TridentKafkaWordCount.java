@@ -34,6 +34,7 @@ import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
 import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
+import org.apache.storm.kafka.trident.OpaqueTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
 import org.apache.storm.spout.SchemeAsMultiScheme;
@@ -95,7 +96,7 @@ public class TridentKafkaWordCount {
      *
      * @return a transactional trident kafka spout.
      */
-    private TransactionalTridentKafkaSpout createKafkaSpout() {
+    private TransactionalTridentKafkaSpout createTransactionalKafkaSpout() {
         ZkHosts hosts = new ZkHosts(zkUrl);
         TridentKafkaConfig config = new TridentKafkaConfig(hosts, "test");
         config.scheme = new SchemeAsMultiScheme(new StringScheme());
@@ -103,6 +104,16 @@ public class TridentKafkaWordCount {
         // Consume new data from the topic
         config.startOffsetTime = kafka.api.OffsetRequest.LatestTime();
         return new TransactionalTridentKafkaSpout(config);
+    }
+
+    private OpaqueTridentKafkaSpout createOpaqueKafkaSpout() {
+        ZkHosts hosts = new ZkHosts(zkUrl);
+        TridentKafkaConfig config = new TridentKafkaConfig(hosts, "test");
+        config.scheme = new SchemeAsMultiScheme(new StringScheme());
+
+        // Consume new data from the topic
+        config.startOffsetTime = kafka.api.OffsetRequest.LatestTime();
+        return new OpaqueTridentKafkaSpout(config);
     }
 
 
@@ -116,7 +127,8 @@ public class TridentKafkaWordCount {
     }
 
     private TridentState addTridentState(TridentTopology tridentTopology) {
-        final Stream spoutStream = tridentTopology.newStream("spout1", createKafkaSpout()).parallelismHint(1);
+//        final Stream spoutStream = tridentTopology.newStream("spout1", createTransactionalKafkaSpout()).parallelismHint(1);
+        final Stream spoutStream = tridentTopology.newStream("spout1", createOpaqueKafkaSpout()).parallelismHint(1);
 
         return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))
                 .each(new Fields("str"), new Split(), new Fields("word"))
