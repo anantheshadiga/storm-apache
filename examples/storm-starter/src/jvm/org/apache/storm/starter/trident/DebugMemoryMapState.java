@@ -44,6 +44,7 @@ public class DebugMemoryMapState<T> extends MemoryMapState<T> {
     public List<T> multiUpdate(List<List<Object>> keys, List<ValueUpdater> updaters) {
         print(keys, updaters);
         if ((updateCount++ % 5) == 0) {
+            LOG.error("Throwing FailedException");
             throw new FailedException("Enforced State Update Fail. On retrial should replay the exact same batch.");
         }
         return super.multiUpdate(keys, updaters);
