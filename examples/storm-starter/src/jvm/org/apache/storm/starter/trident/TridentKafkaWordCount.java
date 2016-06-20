@@ -23,6 +23,7 @@
 package org.apache.storm.starter.trident;
 
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
@@ -34,6 +35,14 @@ import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
 import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
+import org.apache.storm.kafka.spout.KafkaSpoutConfig;
+import org.apache.storm.kafka.spout.KafkaSpoutRetryExponentialBackoff;
+import org.apache.storm.kafka.spout.KafkaSpoutRetryService;
+import org.apache.storm.kafka.spout.KafkaSpoutStreams;
+import org.apache.storm.kafka.spout.KafkaSpoutTupleBuilder;
+import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder;
+import org.apache.storm.kafka.spout.trident.KafkaManager;
+import org.apache.storm.kafka.spout.trident.KafkaOpaquePartitionedTridentSpout;
 import org.apache.storm.kafka.trident.OpaqueTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
@@ -50,10 +59,18 @@ import org.apache.storm.trident.operation.builtin.MapGet;
 import org.apache.storm.trident.testing.MemoryMapState;
 import org.apache.storm.trident.testing.Split;
 import org.apache.storm.tuple.Fields;
+import org.apache.storm.tuple.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST;
 
 /**
  * A sample word count trident topology using transactional kafka spout that has the following components.
@@ -76,7 +93,7 @@ import java.util.Properties;
  *     <a href="https://github.com/apache/storm/tree/master/external/storm-kafka"> Storm Kafka </a>.
  * </p>
  */
-public class TridentKafkaWordCount {
+public class TridentKafkaWordCount implements Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(TridentKafkaWordCount.class);
 
     private String zkUrl;
@@ -116,6 +133,84 @@ public class TridentKafkaWordCount {
         return new OpaqueTridentKafkaSpout(config);
     }
 
+    private KafkaOpaquePartitionedTridentSpout<String, String> createOpaqueKafkaSpoutNew() {
+        return new KafkaOpaquePartitionedTridentSpout<String, String>(getKafkaManager());
+    }
+
+    private KafkaManager<String, String> getKafkaManager() {
+        return new KafkaManager<>(getKafkaSpoutConfig(getKafkaSpoutStreams()));
+    }
+
+    private TridentState addTridentState(TridentTopology tridentTopology) {
+//        final Stream spoutStream = tridentTopology.newStream("spout1", createTransactionalKafkaSpout()).parallelismHint(1);
+//        final Stream spoutStream = tridentTopology.newStream("spout1", createOpaqueKafkaSpout()).parallelismHint(1);
+        final Stream spoutStream = tridentTopology.newStream("spout1", createOpaqueKafkaSpoutNew()).parallelismHint(1);
+
+        return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))
+                .each(new Fields("str"), new Split(), new Fields("word"))
+                .groupBy(new Fields("word"))
+                .persistentAggregate(new DebugMemoryMapState.Factory(), new Count(), new Fields("count"));
+    }
+
+    private KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams, getTuplesBuilder(), getRetryService())
+                .setOffsetCommitPeriodMs(10_000)
+                .setFirstPollOffsetStrategy(EARLIEST)
+                .setMaxUncommittedOffsets(250)
+                .build();
+    }
+
+    private Map<String,Object> getKafkaConsumerProps() {
+        Map<String, Object> props = new HashMap<>();
+//        props.put(KafkaSpoutConfig.Consumer.ENABLE_AUTO_COMMIT, "true");
+        props.put(KafkaSpoutConfig.Consumer.BOOTSTRAP_SERVERS, "127.0.0.1:9092");
+        props.put(KafkaSpoutConfig.Consumer.GROUP_ID, "kafkaSpoutTestGroup");
+        props.put(KafkaSpoutConfig.Consumer.KEY_DESERIALIZER, "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put(KafkaSpoutConfig.Consumer.VALUE_DESERIALIZER, "org.apache.kafka.common.serialization.StringDeserializer");
+        return props;
+    }
+
+    private KafkaSpoutTuplesBuilder<String, String> getTuplesBuilder() {
+        return new KafkaSpoutTuplesBuilder.Builder<>(
+                new TopicsTest0Test1TupleBuilder<String, String>("test"))
+                .build();
+    }
+
+    private static KafkaSpoutRetryService getRetryService() {
+        return new KafkaSpoutRetryExponentialBackoff(getTimeInterval(500, TimeUnit.MICROSECONDS),
+                KafkaSpoutRetryExponentialBackoff.TimeInterval.milliSeconds(2), Integer.MAX_VALUE, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(10));
+    }
+
+    private static KafkaSpoutRetryExponentialBackoff.TimeInterval getTimeInterval(long delay, TimeUnit timeUnit) {
+        return new KafkaSpoutRetryExponentialBackoff.TimeInterval(delay, timeUnit);
+    }
+
+    public class TopicsTest0Test1TupleBuilder<K, V> extends KafkaSpoutTupleBuilder<K,V> {
+        /**
+         * @param topics list of topics that use this implementation to build tuples
+         */
+        public TopicsTest0Test1TupleBuilder(String... topics) {
+            super(topics);
+        }
+
+        @Override
+        public List<Object> buildTuple(ConsumerRecord<K, V> consumerRecord) {
+            /*return new Values(consumerRecord.topic(),
+                    consumerRecord.partition(),
+                    consumerRecord.offset(),
+                    consumerRecord.key(),
+                    consumerRecord.value());
+*/
+            return new Values(consumerRecord.value());
+        }
+    }
+
+    public static KafkaSpoutStreams getKafkaSpoutStreams() {
+//        final Fields outputFields = new Fields("topic", "partition", "offset", "key", "value");
+        final Fields outputFields = new Fields("str");
+        return new KafkaSpoutStreams.Builder(outputFields, new String[]{"test"}).build();
+    }
+
 
     private Stream addDRPCStream(TridentTopology tridentTopology, TridentState state, LocalDRPC drpc) {
         return tridentTopology.newDRPCStream("words", drpc)
@@ -124,16 +219,6 @@ public class TridentKafkaWordCount {
                 .stateQuery(state, new Fields("word"), new MapGet(), new Fields("count"))
                 .each(new Fields("count"), new FilterNull())
                 .project(new Fields("word", "count"));
-    }
-
-    private TridentState addTridentState(TridentTopology tridentTopology) {
-//        final Stream spoutStream = tridentTopology.newStream("spout1", createTransactionalKafkaSpout()).parallelismHint(1);
-        final Stream spoutStream = tridentTopology.newStream("spout1", createOpaqueKafkaSpout()).parallelismHint(1);
-
-        return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))
-                .each(new Fields("str"), new Split(), new Fields("word"))
-                .groupBy(new Fields("word"))
-                .persistentAggregate(new DebugMemoryMapState.Factory(), new Count(), new Fields("count"));
     }
 
     /**

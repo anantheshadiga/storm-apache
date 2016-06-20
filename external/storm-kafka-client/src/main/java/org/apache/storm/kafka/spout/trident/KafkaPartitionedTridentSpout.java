@@ -18,35 +18,21 @@
 
 package org.apache.storm.kafka.spout.trident;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.kafka.spout.KafkaSpoutStreams;
 import org.apache.storm.task.TopologyContext;
-import org.apache.storm.trident.spout.IOpaquePartitionedTridentSpout;
+import org.apache.storm.trident.spout.IPartitionedTridentSpout;
 import org.apache.storm.tuple.Fields;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Map;
 
-public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartitionedTridentSpout<List<TopicPartition>, MyTopicPartition, MyMeta<K,V>> {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaOpaquePartitionedTridentSpout.class);
-
-    private KafkaManager<K, V> kafkaManager;
-
-
-    public KafkaOpaquePartitionedTridentSpout(KafkaManager<K, V> kafkaManager) {
-        this.kafkaManager = kafkaManager;
+public class KafkaPartitionedTridentSpout implements IPartitionedTridentSpout {
+    @Override
+    public Coordinator getCoordinator(Map conf, TopologyContext context) {
+        return null;
     }
 
     @Override
-    public Emitter<List<TopicPartition>, MyTopicPartition, MyMeta<K,V>> getEmitter(Map conf, TopologyContext context) {
-        return new MyEmitter<>(kafkaManager);
-    }
-
-    @Override
-    public Coordinator<List<TopicPartition>> getCoordinator(Map conf, TopologyContext context) {
-        return new MyCoordinator<>(kafkaManager);
+    public Emitter getEmitter(Map conf, TopologyContext context) {
+        return null;
     }
 
     @Override
@@ -56,9 +42,6 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
 
     @Override
     public Fields getOutputFields() {
-        final KafkaSpoutStreams kafkaSpoutStreams = kafkaManager.getKafkaSpoutStreams();
-        return kafkaSpoutStreams.getOutputFields(kafkaSpoutStreams.getTopics().get(0));
+        return null;
     }
-
-
 }
