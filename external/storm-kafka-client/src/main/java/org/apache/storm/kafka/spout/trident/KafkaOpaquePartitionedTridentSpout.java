@@ -35,6 +35,7 @@ import org.apache.storm.tuple.Fields;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -43,9 +44,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartitionedTridentSpout {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaOpaquePartitionedTridentSpout.class);
+public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartitionedTridentSpout<List<TopicPartition>,
+        KafkaOpaquePartitionedTridentSpout<K,V>.MyTopicPartition,
+        KafkaOpaquePartitionedTridentSpout<K,V>.MyMeta> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaOpaquePartitionedTridentSpout.class);
 
     // Kafka
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
@@ -54,7 +57,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
     // Bookkeeping
     private KafkaSpoutStreams kafkaSpoutStreams;                        // Object that wraps all the logic to declare output fields and emit tuples
     private Set<TopicPartition> topicPartitions;
-    private transient KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;      // Object that contains the logic to build tuples for each ConsumerRecord
+    private KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;      // Object that contains the logic to build tuples for each ConsumerRecord
 
 
     public KafkaOpaquePartitionedTridentSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
@@ -66,16 +69,17 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
         // Tuples builder delegate
         tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
 
-        subscribeKafkaConsumer();
+//        subscribeKafkaConsumer();
     }
 
     @Override
-    public Emitter getEmitter(Map conf, TopologyContext context) {
+    public Emitter<List<TopicPartition>, MyTopicPartition, MyMeta> getEmitter(Map conf, TopologyContext context) {
+        subscribeKafkaConsumer();
         return new MyEmitter();
     }
 
     @Override
-    public Coordinator getCoordinator(Map conf, TopologyContext context) {
+    public Coordinator<List<TopicPartition>> getCoordinator(Map conf, TopologyContext context) {
         return new MyCoordinator();
     }
 
@@ -86,10 +90,10 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
 
     @Override
     public Fields getOutputFields() {
-        return null;
+        return kafkaSpoutStreams.getOutputFields(kafkaSpoutStreams.getTopics().get(0));
     }
 
-    class MyMeta {
+    class MyMeta implements Serializable {
         private String topic;
         private int partition = Integer.MIN_VALUE;
 
@@ -126,7 +130,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
         }
     }
 
-    private class MyEmitter implements Emitter<List<TopicPartition>, MyTopicPartition, MyMeta> {
+    private class MyEmitter implements Emitter<List<TopicPartition>, MyTopicPartition, MyMeta>, Serializable {
         @Override
         public MyMeta emitPartitionBatch(TransactionAttempt tx, TridentCollector collector, MyTopicPartition partition, MyMeta lastPartitionMeta) {
             MyMeta currentPartitionMeta = lastPartitionMeta;
@@ -180,7 +184,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
         }
     }
 
-    private class MyCoordinator implements Coordinator<List<TopicPartition>> {
+    public class MyCoordinator implements Coordinator<List<TopicPartition>>, Serializable {
         @Override
         public boolean isReady(long txid) {
             return true;    // the "old" trident kafka spout is like this
@@ -197,7 +201,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
         }
     }
 
-    private class MyTopicPartition implements ISpoutPartition {
+    public class MyTopicPartition implements ISpoutPartition, Serializable {
         private TopicPartition topicPartition;
 
         public MyTopicPartition(String topic, int partition) {
