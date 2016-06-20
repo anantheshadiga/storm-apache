@@ -91,7 +91,7 @@ public class RandomSentenceSpout extends BaseRichSpout {
     }
 
     private String currentDate() {
-      return new SimpleDateFormat("yyyy.MM.dd_HH:mm:ss.SSSS").format(new Date());
+      return new SimpleDateFormat("yyyy.MM.dd_HH:mm:ss.SSSSSS").format(new Date());
     }
   }
 }
