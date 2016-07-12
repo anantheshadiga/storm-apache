@@ -99,6 +99,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
             _index = context.getThisTaskIndex();
             _numTasks = context.getComponentTasks(context.getThisComponentId()).size();
             _state = TransactionalState.newUserState(conf, txStateId);
+            LOG.debug("Created {}", this);
         }
 
         Object _savedCoordinatorMeta = null;
@@ -106,7 +107,8 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
 
         @Override
         public void emitBatch(TransactionAttempt tx, Object coordinatorMeta, TridentCollector collector) {
-            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}]", tx, coordinatorMeta, collector);
+            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [state = {}]",
+                    tx, coordinatorMeta, collector, this);
 
             if(_savedCoordinatorMeta==null || !_savedCoordinatorMeta.equals(coordinatorMeta)) {
                 List<ISpoutPartition> partitions = _emitter.getOrderedPartitions(coordinatorMeta);
@@ -142,20 +144,21 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
                 Object meta = _emitter.emitPartitionBatch(tx, collector, s.partition, lastMeta);
                 metas.put(id, meta);
             }
-            LOG.debug("Emitted Batch. [tx = {}], [coordinatorMeta = {}], [collector = {}]", tx, coordinatorMeta, collector);
+            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [state = {}]",
+                    tx, coordinatorMeta, collector, this);
         }
 
         @Override
         public void success(TransactionAttempt tx) {
-            LOG.debug("Success transaction {}", tx);
             for(EmitterPartitionState state: _partitionStates.values()) {
                 state.rotatingState.cleanupBefore(tx.getTransactionId());
-            }            
+            }
+            LOG.debug("Success transaction {}. [state = {}]", tx, this);
         }
 
         @Override
         public void commit(TransactionAttempt attempt) {
-            LOG.debug("Committing transaction {}", attempt);
+            LOG.debug("Committing transaction {}. [state = {}]", attempt, this);
             // this code here handles a case where a previous commit failed, and the partitions
             // changed since the last commit. This clears out any state for the removed partitions
             // for this txid.
@@ -183,7 +186,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
             for(Entry<String, Object> entry: metas.entrySet()) {
                 _partitionStates.get(entry.getKey()).rotatingState.overrideState(txid, entry.getValue());
             }
-            LOG.debug("Exiting commit method for transaction {}", attempt);
+            LOG.debug("Exiting commit method for transaction {}. [state = {}]", attempt, this);
         }
 
         @Override
@@ -192,8 +195,22 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
             _emitter.close();
             LOG.debug("Closed");
         }
-    } 
-    
+
+        @Override
+        public String toString() {
+            return "Emitter{" +
+                    "_emitter=" + _emitter +
+                    ", _state=" + _state +
+                    ", _cachedMetas=" + _cachedMetas +
+                    ", _partitionStates=" + _partitionStates +
+                    ", _index=" + _index +
+                    ", _numTasks=" + _numTasks +
+                    ", _savedCoordinatorMeta=" + _savedCoordinatorMeta +
+                    ", _changedMeta=" + _changedMeta +
+                    '}';
+        }
+    }
+
     public OpaquePartitionedTridentSpoutExecutor(IOpaquePartitionedTridentSpout<Object, ISpoutPartition, Object> spout) {
         _spout = spout;
     }

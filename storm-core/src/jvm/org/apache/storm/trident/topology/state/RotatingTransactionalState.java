@@ -19,6 +19,8 @@ package org.apache.storm.trident.topology.state;
 
 import org.apache.storm.utils.Utils;
 import org.apache.zookeeper.KeeperException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.List;
@@ -26,6 +28,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 public class RotatingTransactionalState {
+    private static final Logger LOG = LoggerFactory.getLogger(RotatingTransactionalState.class);
+
     public static interface StateInitializer {
         Object init(long txid, Object lastState);
     }    
@@ -40,6 +44,7 @@ public class RotatingTransactionalState {
         _subdir = subdir;
         state.mkdir(subdir);
         sync();
+        LOG.debug("Created {}", this);
     }
 
 
@@ -49,8 +54,13 @@ public class RotatingTransactionalState {
     }
     
     public void overrideState(long txid, Object state) {
+        LOG.debug("Overriding state. [txid = {}],  [state = {}]", txid, state);
+        LOG.trace("Internal state [{}]", this);
+
         _state.setData(txPath(txid), state);
         _curr.put(txid, state);
+
+        LOG.trace("Overriding state complete. Internal state [{}]", this);
     }
 
     public void removeState(long txid) {
@@ -58,10 +68,15 @@ public class RotatingTransactionalState {
             _curr.remove(txid);
             _state.delete(txPath(txid));
         }
+        LOG.debug("Removed state. [txid = {}]", txid);
+        LOG.trace("Internal state [{}]", this);
     }
     
     public Object getState(long txid) {
-        return _curr.get(txid);
+        final Object state = _curr.get(txid);
+        LOG.debug("Getting state. [txid = {}] => [state = {}]", txid, state);
+        LOG.trace("Internal state [{}]", this);
+        return state;
     }
     
     public Object getState(long txid, StateInitializer init) {
@@ -87,7 +102,10 @@ public class RotatingTransactionalState {
             _curr.put(txid, data);
             _state.setData(txPath(txid), data);
         }
-        return _curr.get(txid);
+        Object state = _curr.get(txid);
+        LOG.debug("Getting or initializing state. [txid = {}] => [state = {}]", txid, state);
+        LOG.trace("Internal state [{}]", this);
+        return state;
     }
     
     public Object getPreviousState(long txid) {
@@ -104,12 +122,14 @@ public class RotatingTransactionalState {
      * Returns null if it was created, the value otherwise.
      */
     public Object getStateOrCreate(long txid, StateInitializer init) {
+        Object state;
         if(_curr.containsKey(txid)) {
-            return _curr.get(txid);
+            state = _curr.get(txid);
         } else {
             getState(txid, init);
-            return null;
+            state = null;
         }
+        return state;
     }
     
     public void cleanupBefore(long txid) {
@@ -142,6 +162,14 @@ public class RotatingTransactionalState {
 
     private String txPath(String tx) {
         return _subdir + "/" + tx;
-    }    
-    
+    }
+
+    @Override
+    public String toString() {
+        return "RotatingTransactionalState{" +
+                "_state=" + _state +
+                ", _subdir='" + _subdir + '\'' +
+                ", _curr=" + _curr +
+                '}';
+    }
 }
