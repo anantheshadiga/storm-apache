@@ -51,7 +51,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
         
         @Override
         public Object initializeTransaction(long txid, Object prevMetadata, Object currMetadata) {
-            LOG.debug("Initialize Transaction. txid = {}, prevMetadata = {}, currMetadata = {}", txid, prevMetadata, currMetadata);
+            LOG.debug("Initialize Transaction. [txid = {}], [prevMetadata = {}], [currMetadata = {}]", txid, prevMetadata, currMetadata);
             return _coordinator.getPartitionsForBatch();
         }
 
@@ -65,13 +65,13 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
 
         @Override
         public void success(long txid) {
-            LOG.debug("Success transaction id " + txid);
+            LOG.debug("Success [txid = {}]", txid);
         }
 
         @Override
         public boolean isReady(long txid) {
             boolean ready = _coordinator.isReady(txid);
-            LOG.debug("isReady = {} ", ready);
+            LOG.debug("[isReady = {}], [txid = {}]", ready, txid);
             return ready;
         }
     }
@@ -107,7 +107,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
 
         @Override
         public void emitBatch(TransactionAttempt tx, Object coordinatorMeta, TridentCollector collector) {
-            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [state = {}]",
+            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [this = {}]",
                     tx, coordinatorMeta, collector, this);
 
             if(_savedCoordinatorMeta==null || !_savedCoordinatorMeta.equals(coordinatorMeta)) {
@@ -144,7 +144,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
                 Object meta = _emitter.emitPartitionBatch(tx, collector, s.partition, lastMeta);
                 metas.put(id, meta);
             }
-            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [state = {}]",
+            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [this = {}]",
                     tx, coordinatorMeta, collector, this);
         }
 
@@ -153,12 +153,12 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
             for(EmitterPartitionState state: _partitionStates.values()) {
                 state.rotatingState.cleanupBefore(tx.getTransactionId());
             }
-            LOG.debug("Success transaction {}. [state = {}]", tx, this);
+            LOG.debug("Success transaction {}. [this = {}]", tx, this);
         }
 
         @Override
         public void commit(TransactionAttempt attempt) {
-            LOG.debug("Committing transaction {}. [state = {}]", attempt, this);
+            LOG.debug("Committing transaction {}. [this = {}]", attempt, this);
             // this code here handles a case where a previous commit failed, and the partitions
             // changed since the last commit. This clears out any state for the removed partitions
             // for this txid.
@@ -186,7 +186,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
             for(Entry<String, Object> entry: metas.entrySet()) {
                 _partitionStates.get(entry.getKey()).rotatingState.overrideState(txid, entry.getValue());
             }
-            LOG.debug("Exiting commit method for transaction {}. [state = {}]", attempt, this);
+            LOG.debug("Exiting commit method for transaction {}. [this = {}]", attempt, this);
         }
 
         @Override
@@ -199,7 +199,6 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
         @Override
         public String toString() {
             return "Emitter{" +
-                    "_emitter=" + _emitter +
                     ", _state=" + _state +
                     ", _cachedMetas=" + _cachedMetas +
                     ", _partitionStates=" + _partitionStates +

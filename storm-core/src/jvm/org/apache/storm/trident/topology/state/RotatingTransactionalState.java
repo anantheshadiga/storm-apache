@@ -55,21 +55,22 @@ public class RotatingTransactionalState {
     
     public void overrideState(long txid, Object state) {
         LOG.debug("Overriding state. [txid = {}],  [state = {}]", txid, state);
-        LOG.trace("Internal state [{}]", this);
+        LOG.trace("[{}]", this);
 
         _state.setData(txPath(txid), state);
         _curr.put(txid, state);
 
-        LOG.trace("Overriding state complete. Internal state [{}]", this);
+        LOG.trace("Overriding state complete.  [{}]", this);
     }
 
     public void removeState(long txid) {
+        Object state = null;
         if(_curr.containsKey(txid)) {
-            _curr.remove(txid);
+            state = _curr.remove(txid);
             _state.delete(txPath(txid));
         }
-        LOG.debug("Removed state. [txid = {}]", txid);
-        LOG.trace("Internal state [{}]", this);
+        LOG.debug("Removed [state = {}], [txid = {}]", state, txid);
+        LOG.trace("[{}]", this);
     }
     
     public Object getState(long txid) {
@@ -104,14 +105,24 @@ public class RotatingTransactionalState {
         }
         Object state = _curr.get(txid);
         LOG.debug("Getting or initializing state. [txid = {}] => [state = {}]", txid, state);
-        LOG.trace("Internal state [{}]", this);
+        LOG.trace("[{}]", this);
         return state;
     }
     
     public Object getPreviousState(long txid) {
-        SortedMap<Long, Object> prevMap = _curr.headMap(txid);
-        if(prevMap.isEmpty()) return null;
-        else return prevMap.get(prevMap.lastKey());
+        final SortedMap<Long, Object> prevMap = _curr.headMap(txid);
+        Object state;
+
+        if(prevMap.isEmpty()) {
+            state = null;
+        }
+        else {
+            state = prevMap.get(prevMap.lastKey());
+        }
+
+        LOG.debug("Getting previous [state = {}], [txid = {}]", state, txid);
+        LOG.trace("[{}]", this);
+        return state;
     }
     
     public boolean hasCache(long txid) {

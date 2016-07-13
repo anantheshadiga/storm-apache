@@ -88,6 +88,7 @@ public class TransactionalState {
             byte[] data, List<ACL> acls, CreateMode mode) throws Exception {
         ProtectACLCreateModePathAndBytesable<String> builder =
             curator.create().creatingParentsIfNeeded();
+        LOG.debug("Creating node  [path = {}],  [data = {}],  [acls = {}],  [mode = {}]", path, asString(data), acls, mode);
     
         if (acls == null) {
             if (mode == null ) {
@@ -99,6 +100,10 @@ public class TransactionalState {
         }
 
         TransactionalState.forPath(builder.withACL(acls), path, data);
+    }
+
+    private static String asString(byte[] data) {
+        return data == null ? "null" : new String(data);
     }
 
     public void setData(String path, Object obj) {
@@ -116,7 +121,7 @@ public class TransactionalState {
                 TransactionalState.createNode(_curator, path, ser, _zkAcls,
                         CreateMode.PERSISTENT);
             }
-            LOG.debug("Set [path = {}] => [data = {}]", path, obj);
+            LOG.debug("Set [path = {}] => [data = {}]", path, asString(ser));
         } catch(Exception e) {
             throw new RuntimeException(e);
         }        
