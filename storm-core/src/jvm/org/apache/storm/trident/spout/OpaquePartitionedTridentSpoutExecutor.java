@@ -144,7 +144,7 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
                 Object meta = _emitter.emitPartitionBatch(tx, collector, s.partition, lastMeta);
                 metas.put(id, meta);
             }
-            LOG.debug("Emitting Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [{}]",
+            LOG.debug("Emitted Batch. [transaction = {}], [coordinatorMeta = {}], [collector = {}], [{}]",
                     tx, coordinatorMeta, collector, this);
         }
 
