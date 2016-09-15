@@ -109,7 +109,7 @@ public class EmitterTridentSpout<K,V> implements IOpaquePartitionedTridentSpout.
     private long seek(TopicPartition tp, KafkaTridentSpoutBatchMetadata<K, V> lastBatchMeta) {
         long fetchOffset;
         if (lastBatchMeta != null) {
-            kafkaConsumer.seek(tp, lastBatchMeta.getLastOffset());
+            kafkaConsumer.seek(tp, lastBatchMeta.getLastOffset() + 1);  // seek next offset after last offset from previous batch
             fetchOffset = kafkaConsumer.position(tp);
         } else {
             final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
