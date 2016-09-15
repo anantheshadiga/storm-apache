@@ -34,12 +34,12 @@ public class CoordinatorTridentSpout<K,V> implements IOpaquePartitionedTridentSp
 
     public CoordinatorTridentSpout(KafkaManagerTridentSpout<K, V> kafkaManager) {
         this.kafkaManager = kafkaManager;
-        LOG.debug("created {}", this);
+        LOG.debug("Created {}", this);
     }
 
     @Override
     public boolean isReady(long txid) {
-        LOG.debug("MyCoordinator.isReady");     //TODO Delete
+        LOG.debug("isReady = true");
         return true;    // the "old" trident kafka spout is like this
     }
 
@@ -52,8 +52,7 @@ public class CoordinatorTridentSpout<K,V> implements IOpaquePartitionedTridentSp
 
     @Override
     public void close() {
-        LOG.debug("MyCoordinator.close");     //TODO Delete
-        // the "old" trident kafka spout is like this
+        LOG.debug("Closed"); // the "old" trident kafka spout is like this
     }
 
     @Override
