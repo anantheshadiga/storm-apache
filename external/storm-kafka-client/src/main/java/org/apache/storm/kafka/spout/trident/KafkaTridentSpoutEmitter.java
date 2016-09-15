@@ -46,19 +46,25 @@ import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrat
 public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentSpout.Emitter<List<TopicPartition>, KafkaTridentSpoutTopicPartition, KafkaTridentSpoutBatchMetadata<K,V>>, Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutEmitter.class);
 
-    private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
-    private KafkaTridentSpoutManager<K, V> kafkaManager;
+    // Kafka
     private final KafkaConsumer<K, V> kafkaConsumer;
+
+    // Bookkeeping
+    private final KafkaTridentSpoutManager<K, V> kafkaManager;
+    // Declare some KafkaTridentSpoutManager references for convenience
     private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
-    private long pollTimeoutMs;
-    private KafkaSpoutConfig.FirstPollOffsetStrategy firstPollOffsetStrategy;
+    private final long pollTimeoutMs;
+    private final KafkaSpoutConfig.FirstPollOffsetStrategy firstPollOffsetStrategy;
 
     public KafkaTridentSpoutEmitter(KafkaTridentSpoutManager<K,V> kafkaManager) {
         this.kafkaManager = kafkaManager;
         this.kafkaManager.subscribeKafkaConsumer();
+
+        //must subscribeKafkaConsumer before this line
         kafkaConsumer = kafkaManager.getKafkaConsumer();
+
         tuplesBuilder = kafkaManager.getTuplesBuilder();
-        kafkaSpoutConfig = kafkaManager.getKafkaSpoutConfig();
+        final KafkaSpoutConfig<K, V> kafkaSpoutConfig = kafkaManager.getKafkaSpoutConfig();
         pollTimeoutMs = kafkaSpoutConfig.getPollTimeoutMs();
         firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
         LOG.debug("Created {}", this);
@@ -71,10 +77,9 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
                 partitionTs, tx, collector, lastBatch);
 
         final TopicPartition topicPartition = partitionTs.getTopicPartition();
-
         KafkaTridentSpoutBatchMetadata<K,V> currentBatch = lastBatch;
-
         TopicPartition[] pausedTopicPartitions = new TopicPartition[]{};
+
         try {
             pausedTopicPartitions = pauseTopicPartitions(topicPartition);   // only poll from current topic partition
 
@@ -85,7 +90,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
             LOG.debug("Polled [{}] records from Kafka.", records.count());
 
             if (!records.isEmpty()) {
-                emit(collector, records);
+                emitTuples(collector, records);
                 // build new metadata
                 currentBatch = new KafkaTridentSpoutBatchMetadata<>(topicPartition, records, lastBatch);
             }
@@ -97,7 +102,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
         return currentBatch;
     }
 
-    private void emit(TridentCollector collector, ConsumerRecords<K, V> records) {
+    private void emitTuples(TridentCollector collector, ConsumerRecords<K, V> records) {
         for (ConsumerRecord<K, V> record : records) {
             final List<Object> tuple = tuplesBuilder.buildTuple(record);
             collector.emit(tuple);
@@ -171,11 +176,8 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
 
     @Override
     public String toString() {
-        return "MyEmitter{" +
-                "kafkaSpoutConfig=" + kafkaSpoutConfig +
+        return "KafkaTridentSpoutEmitter{" +
                 ", kafkaManager=" + kafkaManager +
-                ", kafkaConsumer=" + kafkaConsumer +
-                ", tuplesBuilder=" + tuplesBuilder +
                 '}';
     }
 }

@@ -39,12 +39,13 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
 
     // Bookkeeping
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
+    // Declare some KafkaSpoutConfig references for convenience
     private KafkaSpoutStreams kafkaSpoutStreams;                // Object that wraps all the logic to declare output fields and emit tuples
     private KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;        // Object that contains the logic to build tuples for each ConsumerRecord
 
     public KafkaTridentSpoutManager(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;
-        this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
+        kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
         tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
         LOG.debug("Created {}", this);
     }
