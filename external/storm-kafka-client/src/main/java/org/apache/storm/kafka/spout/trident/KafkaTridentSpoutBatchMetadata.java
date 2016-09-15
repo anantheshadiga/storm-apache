@@ -25,10 +25,13 @@ import org.apache.kafka.common.TopicPartition;
 import java.io.Serializable;
 import java.util.List;
 
+/**
+ * Wraps transaction batch information
+ */
 public class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
-    private TopicPartition topicPartition;
-    private long firstOffset;
-    private long lastOffset;
+    private TopicPartition topicPartition;  // topic partition of this batch
+    private long firstOffset;   // first offset of this batch
+    private long lastOffset;    // last offset of this batch
 
     public KafkaTridentSpoutBatchMetadata(TopicPartition topicPartition, long firstOffset, long lastOffset) {
         this.topicPartition = topicPartition;

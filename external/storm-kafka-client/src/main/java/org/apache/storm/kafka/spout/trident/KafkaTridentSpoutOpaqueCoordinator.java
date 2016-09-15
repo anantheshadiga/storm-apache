@@ -40,7 +40,7 @@ public class KafkaTridentSpoutOpaqueCoordinator<K,V> implements IOpaquePartition
     @Override
     public boolean isReady(long txid) {
         LOG.debug("isReady = true");
-        return true;    // the "old" trident kafka spout is like this
+        return true;    // the "old" trident kafka spout always returns true, like this
     }
 
     @Override
@@ -52,7 +52,7 @@ public class KafkaTridentSpoutOpaqueCoordinator<K,V> implements IOpaquePartition
 
     @Override
     public void close() {
-        LOG.debug("Closed"); // the "old" trident kafka spout is like this
+        LOG.debug("Closed"); // the "old" trident kafka spout is no op like this
     }
 
     @Override

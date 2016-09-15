@@ -151,7 +151,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
 
     @Override
     public void refreshPartitions(List<KafkaTridentSpoutTopicPartition> partitionResponsibilities) {
-
+        LOG.debug("Refreshing topic partitions [{}]", partitionResponsibilities);
     }
 
     @Override
@@ -168,7 +168,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
 
     @Override
     public void close() {
-
+        LOG.debug("Closed");
     }
 
     @Override
