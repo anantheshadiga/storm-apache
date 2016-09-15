@@ -21,6 +21,8 @@ package org.apache.storm.kafka.spout.trident;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.List;
@@ -29,6 +31,8 @@ import java.util.List;
  * Wraps transaction batch information
  */
 public class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutBatchMetadata.class);
+
     private TopicPartition topicPartition;  // topic partition of this batch
     private long firstOffset;   // first offset of this batch
     private long lastOffset;    // last offset of this batch
@@ -53,6 +57,7 @@ public class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
                 lastOffset = lastBatch.lastOffset;
             }
         }
+        LOG.debug("Created {}", this);
     }
 
     public long getFirstOffset() {

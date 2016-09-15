@@ -71,17 +71,18 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
     }
 
     @Override
-    public KafkaTridentSpoutBatchMetadata<K,V> emitPartitionBatch(TransactionAttempt tx, TridentCollector collector,
-                                                                  KafkaTridentSpoutTopicPartition partitionTs, KafkaTridentSpoutBatchMetadata<K,V> lastBatch) {
-        LOG.debug("Emitting batch for partition: [partition = {}], [transaction = {}], [collector = {}], [lastBatchMetadata = {}]",
-                partitionTs, tx, collector, lastBatch);
+    public KafkaTridentSpoutBatchMetadata<K, V> emitPartitionBatch(TransactionAttempt tx, TridentCollector collector,
+            KafkaTridentSpoutTopicPartition partitionTs, KafkaTridentSpoutBatchMetadata<K, V> lastBatch) {
+        LOG.debug("Emitting batch: [transaction = {}], [partition = {}], [collector = {}], [lastBatchMetadata = {}]",
+                tx, partitionTs, collector, lastBatch);
 
         final TopicPartition topicPartition = partitionTs.getTopicPartition();
-        KafkaTridentSpoutBatchMetadata<K,V> currentBatch = lastBatch;
+        KafkaTridentSpoutBatchMetadata<K, V> currentBatch = lastBatch;
         TopicPartition[] pausedTopicPartitions = new TopicPartition[]{};
 
         try {
-            pausedTopicPartitions = pauseTopicPartitions(topicPartition);   // only poll from current topic partition
+            // pause other topic partitions to only poll from current topic partition
+            pausedTopicPartitions = pauseTopicPartitions(topicPartition);
 
             seek(topicPartition, lastBatch);
 
@@ -116,7 +117,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
             LOG.debug("Seeking fetch offset to next offset after last offset from previous batch");
 
         } else {
-            LOG.debug("Seeking fetch offset from firstPollOffsetStrategy and previous commits");
+            LOG.debug("Seeking fetch offset from firstPollOffsetStrategy and last commit to Kafka");
             final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
             if (committedOffset != null) {             // offset was committed for this TopicPartition
                 if (firstPollOffsetStrategy.equals(EARLIEST)) {

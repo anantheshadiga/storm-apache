@@ -64,7 +64,7 @@ public class KafkaTridentSpoutOpaque<K,V> implements IOpaquePartitionedTridentSp
     }
 
     @Override
-    public Fields getOutputFields() {   //TODO Check
+    public Fields getOutputFields() {   //TODO Check after merging
         final KafkaSpoutStreams kafkaSpoutStreams = kafkaManager.getKafkaSpoutStreams();
         final Fields outputFields = kafkaSpoutStreams.getOutputFields(kafkaSpoutStreams.getTopics().get(0));
         LOG.debug("OutputFields = {}", outputFields);

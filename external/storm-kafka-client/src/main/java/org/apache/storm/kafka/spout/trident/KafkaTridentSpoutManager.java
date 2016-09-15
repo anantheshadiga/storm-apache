@@ -75,29 +75,29 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         }
     }
 
-    public KafkaConsumer<K, V> getKafkaConsumer() {
+    KafkaConsumer<K, V> getKafkaConsumer() {
         return kafkaConsumer;
     }
 
-    public KafkaSpoutTuplesBuilder<K, V> getTuplesBuilder() {
+    KafkaSpoutTuplesBuilder<K, V> getTuplesBuilder() {
         return tuplesBuilder;
     }
 
-    public Set<TopicPartition> getTopicPartitions() {
+    Set<TopicPartition> getTopicPartitions() {
         return KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.getTopicPartitions();
     }
 
-    public KafkaSpoutStreams getKafkaSpoutStreams() {
+    KafkaSpoutStreams getKafkaSpoutStreams() {
         return kafkaSpoutStreams;
     }
 
-    public KafkaSpoutConfig<K, V> getKafkaSpoutConfig() {
+    KafkaSpoutConfig<K, V> getKafkaSpoutConfig() {
         return kafkaSpoutConfig;
     }
 
     @Override
     public String toString() {
-        return "KafkaManager{" +
+        return "KafkaTridentSpoutManager{" +
                 "kafkaConsumer=" + kafkaConsumer +
                 ", kafkaSpoutConfig=" + kafkaSpoutConfig +
                 '}';

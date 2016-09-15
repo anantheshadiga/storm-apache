@@ -57,7 +57,7 @@ public class KafkaTridentSpoutOpaqueCoordinator<K,V> implements IOpaquePartition
 
     @Override
     public String toString() {
-        return "MyCoordinator{" +
+        return "KafkaTridentSpoutOpaqueCoordinator{" +
                 "kafkaManager=" + kafkaManager +
                 '}';
     }
