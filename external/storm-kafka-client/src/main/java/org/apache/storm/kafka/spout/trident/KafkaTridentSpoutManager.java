@@ -79,9 +79,9 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             getTopicPartitions().addAll(partitions);
                 // TODO
-            for (TopicPartition partition : partitions) {
+            /*for (TopicPartition partition : partitions) {
                 kafkaConsumer.seekToBeginning(partition);
-            }
+            }*/
             LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
         }
