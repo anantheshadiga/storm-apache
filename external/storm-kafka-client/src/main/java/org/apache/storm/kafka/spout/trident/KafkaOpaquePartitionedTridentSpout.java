@@ -33,6 +33,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
     private static final Logger LOG = LoggerFactory.getLogger(KafkaOpaquePartitionedTridentSpout.class);
 
     private KafkaManagerTridentSpout<K, V> kafkaManager;
+    private EmitterTridentSpout<K, V> emitterTridentSpout;
 
     public KafkaOpaquePartitionedTridentSpout(KafkaManagerTridentSpout<K, V> kafkaManager) {
         this.kafkaManager = kafkaManager;
@@ -41,7 +42,11 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
 
     @Override
     public Emitter<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>> getEmitter(Map conf, TopologyContext context) {
-        return new EmitterTridentSpout<>(kafkaManager);
+        // Instance is created on first call rather than in constructor to avoid NotSerializableException
+        if (emitterTridentSpout == null) {
+            emitterTridentSpout = new EmitterTridentSpout<>(kafkaManager);
+        }
+        return emitterTridentSpout;
     }
 
     @Override
@@ -66,6 +71,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
     public String toString() {
         return "KafkaOpaquePartitionedTridentSpout{" +
                 "kafkaManager=" + kafkaManager +
+                ", emitterTridentSpout=" + emitterTridentSpout +
                 '}';
     }
 }
