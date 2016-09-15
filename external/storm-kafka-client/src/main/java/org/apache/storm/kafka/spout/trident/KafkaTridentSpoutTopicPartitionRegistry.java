@@ -21,6 +21,7 @@ package org.apache.storm.kafka.spout.trident;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -34,14 +35,14 @@ public enum KafkaTridentSpoutTopicPartitionRegistry {
     }
 
     public Set<TopicPartition> getTopicPartitions() {
-        return topicPartitions;     //TODO unmodifiable
+        return Collections.unmodifiableSet(topicPartitions);
     }
 
-    public void add(Collection<? extends TopicPartition> topicPartitions) {
+    public void addAll(Collection<? extends TopicPartition> topicPartitions) {
         this.topicPartitions.addAll(topicPartitions);
     }
 
-    public void remove(Collection<? extends TopicPartition> topicPartitions) {
+    public void removeAll(Collection<? extends TopicPartition> topicPartitions) {
         this.topicPartitions.removeAll(topicPartitions);
     }
 }

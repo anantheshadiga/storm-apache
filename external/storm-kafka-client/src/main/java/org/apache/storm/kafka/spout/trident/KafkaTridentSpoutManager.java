@@ -64,12 +64,12 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
-            getTopicPartitions().removeAll(partitions);
+            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
         }
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            getTopicPartitions().addAll(partitions);
+            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
             LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
         }
