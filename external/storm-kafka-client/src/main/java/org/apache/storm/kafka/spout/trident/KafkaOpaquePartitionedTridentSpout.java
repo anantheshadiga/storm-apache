@@ -34,6 +34,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
 
     private KafkaManagerTridentSpout<K, V> kafkaManager;
     private EmitterTridentSpout<K, V> emitterTridentSpout;
+    private CoordinatorTridentSpout<K, V> coordinator;
 
     public KafkaOpaquePartitionedTridentSpout(KafkaManagerTridentSpout<K, V> kafkaManager) {
         this.kafkaManager = kafkaManager;
@@ -42,7 +43,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
 
     @Override
     public Emitter<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>> getEmitter(Map conf, TopologyContext context) {
-        // Instance is created on first call rather than in constructor to avoid NotSerializableException
+        // Instance is created on first call rather than in constructor to avoid NotSerializableException caused by KafkaConsumer
         if (emitterTridentSpout == null) {
             emitterTridentSpout = new EmitterTridentSpout<>(kafkaManager);
         }
@@ -51,7 +52,10 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
 
     @Override
     public Coordinator<List<TopicPartition>> getCoordinator(Map conf, TopologyContext context) {
-        return new CoordinatorTridentSpout<>(kafkaManager);
+        if (coordinator == null) {
+            coordinator = new CoordinatorTridentSpout<>(kafkaManager);
+        }
+        return coordinator;
     }
 
     @Override
