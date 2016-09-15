@@ -29,32 +29,23 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Set;
 
 public class KafkaTridentSpoutManager<K, V> implements Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutManager.class);
 
     // Kafka
-    private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
     private transient KafkaConsumer<K, V> kafkaConsumer;
 
     // Bookkeeping
-    private KafkaSpoutStreams kafkaSpoutStreams;                        // Object that wraps all the logic to declare output fields and emit tuples
-    private Set<TopicPartition> topicPartitions;
-    private KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;      // Object that contains the logic to build tuples for each ConsumerRecord
+    private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
+    private KafkaSpoutStreams kafkaSpoutStreams;                // Object that wraps all the logic to declare output fields and emit tuples
+    private KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;        // Object that contains the logic to build tuples for each ConsumerRecord
 
     public KafkaTridentSpoutManager(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;
-
         this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
-
-        topicPartitions = new HashSet<>();
-
-        // Tuples builder delegate
         tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
-
-        //        subscribeKafkaConsumer();
         LOG.debug("Created {}", this);
     }
 
@@ -78,10 +69,6 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             getTopicPartitions().addAll(partitions);
-                // TODO
-            /*for (TopicPartition partition : partitions) {
-                kafkaConsumer.seekToBeginning(partition);
-            }*/
             LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
         }
@@ -97,7 +84,6 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
 
     public Set<TopicPartition> getTopicPartitions() {
         return KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.getTopicPartitions();
-//        return topicPartitions;
     }
 
     public KafkaSpoutStreams getKafkaSpoutStreams() {
@@ -111,11 +97,8 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
     @Override
     public String toString() {
         return "KafkaManager{" +
-                "kafkaSpoutConfig=" + kafkaSpoutConfig +
-                ", kafkaConsumer=" + kafkaConsumer +
-                ", kafkaSpoutStreams=" + kafkaSpoutStreams +
-                ", topicPartitions=" + topicPartitions +
-                ", tuplesBuilder=" + tuplesBuilder +
+                "kafkaConsumer=" + kafkaConsumer +
+                ", kafkaSpoutConfig=" + kafkaSpoutConfig +
                 '}';
     }
 }

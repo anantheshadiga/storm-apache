@@ -73,9 +73,10 @@ public class KafkaTridentSpoutOpaque<K,V> implements IOpaquePartitionedTridentSp
 
     @Override
     public String toString() {
-        return "KafkaOpaquePartitionedTridentSpout{" +
+        return "KafkaTridentSpoutOpaque{" +
                 "kafkaManager=" + kafkaManager +
-                ", emitterTridentSpout=" + kafkaTridentSpoutEmitter +
+                ", kafkaTridentSpoutEmitter=" + kafkaTridentSpoutEmitter +
+                ", coordinator=" + coordinator +
                 '}';
     }
 }
