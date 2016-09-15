@@ -27,12 +27,12 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CoordinatorTridentSpout<K,V> implements IOpaquePartitionedTridentSpout.Coordinator<List<TopicPartition>>, Serializable {
-    private static final Logger LOG = LoggerFactory.getLogger(CoordinatorTridentSpout.class);
+public class KafkaTridentSpoutOpaqueCoordinator<K,V> implements IOpaquePartitionedTridentSpout.Coordinator<List<TopicPartition>>, Serializable {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutOpaqueCoordinator.class);
 
-    private KafkaManagerTridentSpout<K,V> kafkaManager;
+    private KafkaTridentSpoutManager<K,V> kafkaManager;
 
-    public CoordinatorTridentSpout(KafkaManagerTridentSpout<K, V> kafkaManager) {
+    public KafkaTridentSpoutOpaqueCoordinator(KafkaTridentSpoutManager<K, V> kafkaManager) {
         this.kafkaManager = kafkaManager;
         LOG.debug("Created {}", this);
     }

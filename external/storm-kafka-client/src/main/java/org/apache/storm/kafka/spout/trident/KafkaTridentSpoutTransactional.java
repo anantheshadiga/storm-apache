@@ -18,30 +18,30 @@
 
 package org.apache.storm.kafka.spout.trident;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.storm.task.TopologyContext;
+import org.apache.storm.trident.spout.IPartitionedTridentSpout;
+import org.apache.storm.tuple.Fields;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.Map;
 
-public enum TopicPartitionRegistry {
-    INSTANCE;
-
-    private Set<TopicPartition> topicPartitions;
-
-    TopicPartitionRegistry() {
-        this.topicPartitions = new HashSet<>();
+public class KafkaTridentSpoutTransactional implements IPartitionedTridentSpout {
+    @Override
+    public Coordinator getCoordinator(Map conf, TopologyContext context) {
+        return null;
     }
 
-    public Set<TopicPartition> getTopicPartitions() {
-        return topicPartitions;     //TODO unmodifiable
+    @Override
+    public Emitter getEmitter(Map conf, TopologyContext context) {
+        return null;
     }
 
-    public void add(Collection<? extends TopicPartition> topicPartitions) {
-        this.topicPartitions.addAll(topicPartitions);
+    @Override
+    public Map<String, Object> getComponentConfiguration() {
+        return null;
     }
 
-    public void remove(Collection<? extends TopicPartition> topicPartitions) {
-        this.topicPartitions.removeAll(topicPartitions);
+    @Override
+    public Fields getOutputFields() {
+        return null;
     }
 }

@@ -29,31 +29,31 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
-public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartitionedTridentSpout<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>> {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaOpaquePartitionedTridentSpout.class);
+public class KafkaTridentSpoutOpaque<K,V> implements IOpaquePartitionedTridentSpout<List<TopicPartition>, KafkaTridentSpoutTopicPartition, KafkaTridentSpoutBatchMetadata<K,V>> {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutOpaque.class);
 
-    private KafkaManagerTridentSpout<K, V> kafkaManager;
-    private EmitterTridentSpout<K, V> emitterTridentSpout;
-    private CoordinatorTridentSpout<K, V> coordinator;
+    private KafkaTridentSpoutManager<K, V> kafkaManager;
+    private KafkaTridentSpoutEmitter<K, V> kafkaTridentSpoutEmitter;
+    private KafkaTridentSpoutOpaqueCoordinator<K, V> coordinator;
 
-    public KafkaOpaquePartitionedTridentSpout(KafkaManagerTridentSpout<K, V> kafkaManager) {
+    public KafkaTridentSpoutOpaque(KafkaTridentSpoutManager<K, V> kafkaManager) {
         this.kafkaManager = kafkaManager;
         LOG.debug("Created {}", this);
     }
 
     @Override
-    public Emitter<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>> getEmitter(Map conf, TopologyContext context) {
+    public Emitter<List<TopicPartition>, KafkaTridentSpoutTopicPartition, KafkaTridentSpoutBatchMetadata<K,V>> getEmitter(Map conf, TopologyContext context) {
         // Instance is created on first call rather than in constructor to avoid NotSerializableException caused by KafkaConsumer
-        if (emitterTridentSpout == null) {
-            emitterTridentSpout = new EmitterTridentSpout<>(kafkaManager);
+        if (kafkaTridentSpoutEmitter == null) {
+            kafkaTridentSpoutEmitter = new KafkaTridentSpoutEmitter<>(kafkaManager);
         }
-        return emitterTridentSpout;
+        return kafkaTridentSpoutEmitter;
     }
 
     @Override
     public Coordinator<List<TopicPartition>> getCoordinator(Map conf, TopologyContext context) {
         if (coordinator == null) {
-            coordinator = new CoordinatorTridentSpout<>(kafkaManager);
+            coordinator = new KafkaTridentSpoutOpaqueCoordinator<>(kafkaManager);
         }
         return coordinator;
     }
@@ -75,7 +75,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
     public String toString() {
         return "KafkaOpaquePartitionedTridentSpout{" +
                 "kafkaManager=" + kafkaManager +
-                ", emitterTridentSpout=" + emitterTridentSpout +
+                ", emitterTridentSpout=" + kafkaTridentSpoutEmitter +
                 '}';
     }
 }

@@ -43,17 +43,17 @@ import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrat
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.UNCOMMITTED_EARLIEST;
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.UNCOMMITTED_LATEST;
 
-public class EmitterTridentSpout<K,V> implements IOpaquePartitionedTridentSpout.Emitter<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>>, Serializable {
-    private static final Logger LOG = LoggerFactory.getLogger(EmitterTridentSpout.class);
+public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentSpout.Emitter<List<TopicPartition>, KafkaTridentSpoutTopicPartition, KafkaTridentSpoutBatchMetadata<K,V>>, Serializable {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutEmitter.class);
 
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
-    private KafkaManagerTridentSpout<K, V> kafkaManager;
+    private KafkaTridentSpoutManager<K, V> kafkaManager;
     private final KafkaConsumer<K, V> kafkaConsumer;
     private final KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;
     private long pollTimeoutMs;
     private KafkaSpoutConfig.FirstPollOffsetStrategy firstPollOffsetStrategy;
 
-    public EmitterTridentSpout(KafkaManagerTridentSpout<K,V> kafkaManager) {
+    public KafkaTridentSpoutEmitter(KafkaTridentSpoutManager<K,V> kafkaManager) {
         this.kafkaManager = kafkaManager;
         this.kafkaManager.subscribeKafkaConsumer();
         kafkaConsumer = kafkaManager.getKafkaConsumer();
@@ -66,7 +66,7 @@ public class EmitterTridentSpout<K,V> implements IOpaquePartitionedTridentSpout.
 
     @Override
     public KafkaTridentSpoutBatchMetadata<K,V> emitPartitionBatch(TransactionAttempt tx, TridentCollector collector,
-                                                                  TopicPartitionTridentSpout partitionTs, KafkaTridentSpoutBatchMetadata<K,V> lastBatch) {
+                                                                  KafkaTridentSpoutTopicPartition partitionTs, KafkaTridentSpoutBatchMetadata<K,V> lastBatch) {
         LOG.debug("Emitting batch for partition: [partition = {}], [transaction = {}], [collector = {}], [lastMetadata = {}]",
                 partitionTs, tx, collector, lastBatch);
 
@@ -150,16 +150,16 @@ public class EmitterTridentSpout<K,V> implements IOpaquePartitionedTridentSpout.
     }
 
     @Override
-    public void refreshPartitions(List<TopicPartitionTridentSpout> partitionResponsibilities) {
+    public void refreshPartitions(List<KafkaTridentSpoutTopicPartition> partitionResponsibilities) {
 
     }
 
     @Override
-    public List<TopicPartitionTridentSpout> getOrderedPartitions(List<TopicPartition> allPartitionInfo) {
-        final List<TopicPartitionTridentSpout> topicPartitionsTrident = new ArrayList<>(allPartitionInfo == null ? 0 : allPartitionInfo.size());
+    public List<KafkaTridentSpoutTopicPartition> getOrderedPartitions(List<TopicPartition> allPartitionInfo) {
+        final List<KafkaTridentSpoutTopicPartition> topicPartitionsTrident = new ArrayList<>(allPartitionInfo == null ? 0 : allPartitionInfo.size());
         if (allPartitionInfo != null) {
             for (TopicPartition topicPartition : allPartitionInfo) {
-                topicPartitionsTrident.add(new TopicPartitionTridentSpout(topicPartition));
+                topicPartitionsTrident.add(new KafkaTridentSpoutTopicPartition(topicPartition));
             }
         }
         LOG.debug("OrderedPartitions = {}", topicPartitionsTrident);

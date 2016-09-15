@@ -25,7 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.io.Serializable;
 import java.util.List;
 
-class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
+public class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
     private TopicPartition topicPartition;
     private long firstOffset;
     private long lastOffset;
@@ -60,10 +60,15 @@ class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
         return lastOffset;
     }
 
+    public TopicPartition getTopicPartition() {
+        return topicPartition;
+    }
+
     @Override
     public String toString() {
-        return "MyMeta{" +
-                "firstOffset=" + firstOffset +
+        return "KafkaTridentSpoutBatchMetadata{" +
+                "topicPartition=" + topicPartition +
+                ", firstOffset=" + firstOffset +
                 ", lastOffset=" + lastOffset +
                 '}';
     }

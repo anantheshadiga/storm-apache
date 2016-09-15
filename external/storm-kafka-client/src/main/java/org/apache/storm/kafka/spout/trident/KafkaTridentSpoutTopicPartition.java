@@ -23,14 +23,17 @@ import org.apache.storm.trident.spout.ISpoutPartition;
 
 import java.io.Serializable;
 
-public class TopicPartitionTridentSpout implements ISpoutPartition, Serializable {
+/**
+ * {@link ISpoutPartition} that wraps {@link TopicPartition} information
+ */
+public class KafkaTridentSpoutTopicPartition implements ISpoutPartition, Serializable {
     private TopicPartition topicPartition;
 
-    public TopicPartitionTridentSpout(String topic, int partition) {
+    public KafkaTridentSpoutTopicPartition(String topic, int partition) {
         this(new TopicPartition(topic, partition));
     }
 
-    public TopicPartitionTridentSpout(TopicPartition topicPartition) {
+    public KafkaTridentSpoutTopicPartition(TopicPartition topicPartition) {
         this.topicPartition = topicPartition;
     }
 
@@ -48,7 +51,7 @@ public class TopicPartitionTridentSpout implements ISpoutPartition, Serializable
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        TopicPartitionTridentSpout that = (TopicPartitionTridentSpout) o;
+        KafkaTridentSpoutTopicPartition that = (KafkaTridentSpoutTopicPartition) o;
 
         return topicPartition != null ? topicPartition.equals(that.topicPartition) : that.topicPartition == null;
     }

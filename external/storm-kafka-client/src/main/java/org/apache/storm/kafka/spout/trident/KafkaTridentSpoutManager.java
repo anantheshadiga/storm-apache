@@ -32,8 +32,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-public class KafkaManagerTridentSpout<K, V> implements Serializable {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaManagerTridentSpout.class);
+public class KafkaTridentSpoutManager<K, V> implements Serializable {
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutManager.class);
 
     // Kafka
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
@@ -44,7 +44,7 @@ public class KafkaManagerTridentSpout<K, V> implements Serializable {
     private Set<TopicPartition> topicPartitions;
     private KafkaSpoutTuplesBuilder<K, V> tuplesBuilder;      // Object that contains the logic to build tuples for each ConsumerRecord
 
-    public KafkaManagerTridentSpout(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
+    public KafkaTridentSpoutManager(KafkaSpoutConfig<K, V> kafkaSpoutConfig) {
         this.kafkaSpoutConfig = kafkaSpoutConfig;
 
         this.kafkaSpoutStreams = kafkaSpoutConfig.getKafkaSpoutStreams();
@@ -55,6 +55,7 @@ public class KafkaManagerTridentSpout<K, V> implements Serializable {
         tuplesBuilder = kafkaSpoutConfig.getTuplesBuilder();
 
         //        subscribeKafkaConsumer();
+        LOG.debug("Created {}", this);
     }
 
     void subscribeKafkaConsumer() {
@@ -95,7 +96,7 @@ public class KafkaManagerTridentSpout<K, V> implements Serializable {
     }
 
     public Set<TopicPartition> getTopicPartitions() {
-        return TopicPartitionRegistry.INSTANCE.getTopicPartitions();
+        return KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.getTopicPartitions();
 //        return topicPartitions;
     }
 
