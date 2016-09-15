@@ -20,6 +20,7 @@ package org.apache.storm.kafka.spout.trident;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -33,10 +34,14 @@ public enum TopicPartitionRegistry {
     }
 
     public Set<TopicPartition> getTopicPartitions() {
-        return topicPartitions;
+        return topicPartitions;     //TODO unmodifiable
     }
 
-    public void setTopicPartitions(Set<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions;
+    public void add(Collection<? extends TopicPartition> topicPartitions) {
+        this.topicPartitions.addAll(topicPartitions);
+    }
+
+    public void remove(Collection<? extends TopicPartition> topicPartitions) {
+        this.topicPartitions.removeAll(topicPartitions);
     }
 }

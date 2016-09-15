@@ -69,7 +69,7 @@ public class KafkaManagerTridentSpout<K, V> implements Serializable {
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            LOG.debug("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
+            LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
             getTopicPartitions().removeAll(partitions);
         }
@@ -77,7 +77,11 @@ public class KafkaManagerTridentSpout<K, V> implements Serializable {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             getTopicPartitions().addAll(partitions);
-            LOG.debug("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
+                // TODO
+            for (TopicPartition partition : partitions) {
+                kafkaConsumer.seekToBeginning(partition);
+            }
+            LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
         }
     }

@@ -20,35 +20,44 @@ package org.apache.storm.kafka.spout.trident;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.TopicPartition;
 
 import java.io.Serializable;
+import java.util.List;
 
-class MetadataTridentSpout<K,V> implements Serializable {
-    private String topic;
-    private int partition = Integer.MIN_VALUE;
+class KafkaTridentSpoutBatchMetadata<K,V> implements Serializable {
+    private TopicPartition topicPartition;
+    private long firstOffset;
+    private long lastOffset;
 
-    private long firstOffset = Long.MIN_VALUE;
-    private long lastOffset = Long.MIN_VALUE;
+    public KafkaTridentSpoutBatchMetadata(TopicPartition topicPartition, long firstOffset, long lastOffset) {
+        this.topicPartition = topicPartition;
+        this.firstOffset = firstOffset;
+        this.lastOffset = lastOffset;
+    }
 
-    public MetadataTridentSpout(ConsumerRecords<K,V> consumerRecords) {
-        for (ConsumerRecord<K, V> consumerRecord : consumerRecords) {
-            if (topic == null ) {
-                topic = consumerRecord.topic();
-            }
-            if(partition == Integer.MIN_VALUE) {
-                partition = consumerRecord.partition();
-            }
+    public KafkaTridentSpoutBatchMetadata(TopicPartition topicPartition, ConsumerRecords<K, V> consumerRecords, KafkaTridentSpoutBatchMetadata<K, V> lastBatch) {
+        this.topicPartition = topicPartition;
 
-            long offset = consumerRecord.offset();
+        List<ConsumerRecord<K, V>> records = consumerRecords.records(topicPartition);
 
-            if (firstOffset == Long.MIN_VALUE || firstOffset > offset) {
-                firstOffset = offset;
-            }
-
-            if (lastOffset == Long.MIN_VALUE || lastOffset < offset) {
-                lastOffset = offset;
+        if (records != null && !records.isEmpty()) {
+            firstOffset = records.get(0).offset();
+            lastOffset = records.get(records.size() - 1).offset();
+        } else {
+            if (lastBatch != null) {
+                firstOffset = lastBatch.firstOffset;
+                lastOffset = lastBatch.lastOffset;
             }
         }
+    }
+
+    public long getFirstOffset() {
+        return firstOffset;
+    }
+
+    public long getLastOffset() {
+        return lastOffset;
     }
 
     @Override

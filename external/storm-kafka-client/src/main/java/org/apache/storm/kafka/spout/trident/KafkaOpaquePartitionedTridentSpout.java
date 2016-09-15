@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 
-public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartitionedTridentSpout<List<TopicPartition>, TopicPartitionTridentSpout, MetadataTridentSpout<K,V>> {
+public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartitionedTridentSpout<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>> {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaOpaquePartitionedTridentSpout.class);
 
     private KafkaManagerTridentSpout<K, V> kafkaManager;
@@ -40,7 +40,7 @@ public class KafkaOpaquePartitionedTridentSpout<K,V> implements IOpaquePartition
     }
 
     @Override
-    public Emitter<List<TopicPartition>, TopicPartitionTridentSpout, MetadataTridentSpout<K,V>> getEmitter(Map conf, TopologyContext context) {
+    public Emitter<List<TopicPartition>, TopicPartitionTridentSpout, KafkaTridentSpoutBatchMetadata<K,V>> getEmitter(Map conf, TopologyContext context) {
         return new EmitterTridentSpout<>(kafkaManager);
     }
 

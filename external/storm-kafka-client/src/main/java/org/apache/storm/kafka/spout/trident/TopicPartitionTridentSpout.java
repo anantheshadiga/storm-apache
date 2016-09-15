@@ -34,6 +34,15 @@ public class TopicPartitionTridentSpout implements ISpoutPartition, Serializable
         this.topicPartition = topicPartition;
     }
 
+    public TopicPartition getTopicPartition() {
+        return topicPartition;
+    }
+
+    @Override
+    public String getId() {
+        return topicPartition.topic() + "/" + topicPartition.partition();
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -42,11 +51,6 @@ public class TopicPartitionTridentSpout implements ISpoutPartition, Serializable
         TopicPartitionTridentSpout that = (TopicPartitionTridentSpout) o;
 
         return topicPartition != null ? topicPartition.equals(that.topicPartition) : that.topicPartition == null;
-
-    }
-
-    public TopicPartition getTopicPartition() {
-        return topicPartition;
     }
 
     @Override
@@ -57,10 +61,5 @@ public class TopicPartitionTridentSpout implements ISpoutPartition, Serializable
     @Override
     public String toString()  {
         return topicPartition.toString();
-    }
-
-    @Override
-    public String getId() {
-        return topicPartition.topic() + "/" + topicPartition.partition();
     }
 }
