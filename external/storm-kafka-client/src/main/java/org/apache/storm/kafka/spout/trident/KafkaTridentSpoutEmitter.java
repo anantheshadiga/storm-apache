@@ -67,7 +67,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
     @Override
     public KafkaTridentSpoutBatchMetadata<K,V> emitPartitionBatch(TransactionAttempt tx, TridentCollector collector,
                                                                   KafkaTridentSpoutTopicPartition partitionTs, KafkaTridentSpoutBatchMetadata<K,V> lastBatch) {
-        LOG.debug("Emitting batch for partition: [partition = {}], [transaction = {}], [collector = {}], [lastMetadata = {}]",
+        LOG.debug("Emitting batch for partition: [partition = {}], [transaction = {}], [collector = {}], [lastBatchMetadata = {}]",
                 partitionTs, tx, collector, lastBatch);
 
         final TopicPartition topicPartition = partitionTs.getTopicPartition();
@@ -93,7 +93,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
             kafkaConsumer.resume(pausedTopicPartitions);
             LOG.trace("Resumed topic partitions [{}]", Arrays.toString(pausedTopicPartitions));
         }
-        LOG.debug("Current metadata {}", currentBatch);
+        LOG.debug("Current batch metadata {}", currentBatch);
         return currentBatch;
     }
 
@@ -105,25 +105,22 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
         }
     }
 
-    // TODO Refactor this code
     private long seek(TopicPartition tp, KafkaTridentSpoutBatchMetadata<K, V> lastBatchMeta) {
-        long fetchOffset;
         if (lastBatchMeta != null) {
             kafkaConsumer.seek(tp, lastBatchMeta.getLastOffset() + 1);  // seek next offset after last offset from previous batch
-            fetchOffset = kafkaConsumer.position(tp);
+            LOG.debug("Seeking fetch offset to next offset after last offset from previous batch");
+
         } else {
+            LOG.debug("Seeking fetch offset from firstPollOffsetStrategy and previous commits");
             final OffsetAndMetadata committedOffset = kafkaConsumer.committed(tp);
             if (committedOffset != null) {             // offset was committed for this TopicPartition
                 if (firstPollOffsetStrategy.equals(EARLIEST)) {
                     kafkaConsumer.seekToBeginning(tp);
-                    fetchOffset = kafkaConsumer.position(tp);
                 } else if (firstPollOffsetStrategy.equals(LATEST)) {
                     kafkaConsumer.seekToEnd(tp);
-                    fetchOffset = kafkaConsumer.position(tp);
                 } else {
                     // By default polling starts at the last committed offset. +1 to point fetch to the first uncommitted offset.
-                    fetchOffset = committedOffset.offset() + 1;
-                    kafkaConsumer.seek(tp, fetchOffset);
+                    kafkaConsumer.seek(tp, committedOffset.offset() + 1);
                 }
             } else {    // no commits have ever been done, so start at the beginning or end depending on the strategy
                 if (firstPollOffsetStrategy.equals(EARLIEST) || firstPollOffsetStrategy.equals(UNCOMMITTED_EARLIEST)) {
@@ -131,9 +128,10 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
                 } else if (firstPollOffsetStrategy.equals(LATEST) || firstPollOffsetStrategy.equals(UNCOMMITTED_LATEST)) {
                     kafkaConsumer.seekToEnd(tp);
                 }
-                fetchOffset = kafkaConsumer.position(tp);
             }
         }
+        final long fetchOffset = kafkaConsumer.position(tp);
+        LOG.debug("[set fetchOffset = {}]", fetchOffset);
         return fetchOffset;
     }
 
