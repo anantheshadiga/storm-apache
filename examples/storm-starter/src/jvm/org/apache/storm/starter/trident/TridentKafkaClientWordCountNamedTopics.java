@@ -60,15 +60,15 @@ public class TridentKafkaClientWordCountNamedTopics extends TridentKafkaWordCoun
     }
 
     private KafkaTridentSpoutOpaque<String, String> createOpaqueKafkaSpoutNew() {
-        return new KafkaTridentSpoutOpaque<String, String>(getKafkaTridentManager());
-    }
-
-    private KafkaTridentSpoutManager<String, String> getKafkaTridentManager() {
-        return new KafkaTridentSpoutManager<>(getKafkaSpoutConfig(getKafkaSpoutStreams()));
+        return new KafkaTridentSpoutOpaque<>(
+                new KafkaTridentSpoutManager<>(
+                        getKafkaSpoutConfig(
+                        getKafkaSpoutStreams())));
     }
 
     private KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(), kafkaSpoutStreams, getTuplesBuilder(), getRetryService())
+        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(),
+                    kafkaSpoutStreams, getTuplesBuilder(), getRetryService())
                 .setOffsetCommitPeriodMs(10_000)
                 .setFirstPollOffsetStrategy(EARLIEST)
                 .setMaxUncommittedOffsets(250)
