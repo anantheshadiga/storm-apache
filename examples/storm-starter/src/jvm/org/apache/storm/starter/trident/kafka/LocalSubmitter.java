@@ -39,16 +39,24 @@ public class LocalSubmitter {
         this.cluster = cluster;
     }
 
+     public static LocalSubmitter newInstance() {
+        return new LocalSubmitter(new LocalDRPC(), new LocalCluster());
+    }
+
+    public static Config defaultConfig() {
+        final Config conf = new Config();
+        conf.setMaxSpoutPending(20);
+        conf.setMaxTaskParallelism(1);
+        conf.setNumWorkers(1);
+        return conf;
+    }
+
     public LocalSubmitter(StormTopology topology, LocalDRPC drpc, LocalCluster cluster, String name) {
         this(drpc, cluster);
     }
 
     public void submit(String name, Config config, StormTopology topology) {
         cluster.submitTopology(name, config, topology);
-    }
-
-    public void submit(String name, StormTopology topology) {
-        cluster.submitTopology(name, defaultConfig(), topology);
     }
 
     /**
@@ -74,11 +82,11 @@ public class LocalSubmitter {
         cluster.shutdown();
     }
 
-    public static Config defaultConfig() {
-        final Config conf = new Config();
-        conf.setMaxSpoutPending(20);
-        conf.setMaxTaskParallelism(1);
-        conf.setNumWorkers(1);
-        return conf;
+    public LocalDRPC getDrpc() {
+        return drpc;
+    }
+
+    public LocalCluster getCluster() {
+        return cluster;
     }
 }

@@ -19,8 +19,6 @@ package org.apache.storm.starter.trident.kafka;
 
 
 import org.apache.storm.Config;
-import org.apache.storm.LocalCluster;
-import org.apache.storm.LocalDRPC;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.kafka.StringScheme;
 import org.apache.storm.kafka.ZkHosts;
@@ -91,9 +89,8 @@ public class TridentKafkaWordCount implements Serializable {
             StormSubmitter.submitTopology(args[2] + "-consumer", tpConf, TridentKafkaConsumerTopology.newTopology(
                     new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0]))));
         } else { //Submit Local
-            final LocalDRPC drpc = new LocalDRPC();
-            final LocalCluster cluster = new LocalCluster();
-            final LocalSubmitter localSubmitter = new LocalSubmitter(drpc, cluster);
+
+            final LocalSubmitter localSubmitter = LocalSubmitter.newInstance();
             final String prodTpName = "kafkaBolt";
             final String consTpName = "wordCounter";
 
@@ -101,7 +98,7 @@ public class TridentKafkaWordCount implements Serializable {
                 // Producer
                 localSubmitter.submit(prodTpName, tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[0], topicName));
                 // Consumer
-                localSubmitter.submit(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(drpc,
+                localSubmitter.submit(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(localSubmitter.getDrpc(),
                         new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0]))));
 
                 // print
