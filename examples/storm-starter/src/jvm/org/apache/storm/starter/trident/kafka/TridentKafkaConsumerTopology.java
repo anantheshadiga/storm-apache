@@ -58,7 +58,6 @@ public class TridentKafkaConsumerTopology {
 
     /**
      * @param drpc The DRPC stream to be used in querying the word counts. Can be null in distributed mode
-     * @param tridentSpout
      * @return a trident topology that consumes sentences from the kafka topic specified using a
      * {@link TransactionalTridentKafkaSpout} computes the word count and stores it in a {@link MemoryMapState}.
      */
