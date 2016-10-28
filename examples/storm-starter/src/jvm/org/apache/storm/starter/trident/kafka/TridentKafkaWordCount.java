@@ -84,7 +84,7 @@ public class TridentKafkaWordCount implements Serializable {
 
         if (args.length == 3)  { //Submit Remote
             // Producer
-            StormSubmitter.submitTopology(args[2] + "-producer", tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[0], topicName));
+            StormSubmitter.submitTopology(args[2] + "-producer", tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[1], topicName));
             // Consumer
             StormSubmitter.submitTopology(args[2] + "-consumer", tpConf, TridentKafkaConsumerTopology.newTopology(
                     new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0]))));
@@ -96,13 +96,13 @@ public class TridentKafkaWordCount implements Serializable {
 
             try {
                 // Producer
-                localSubmitter.submit(prodTpName, tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[0], topicName));
+                localSubmitter.submit(prodTpName, tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[1], topicName));
                 // Consumer
                 localSubmitter.submit(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(localSubmitter.getDrpc(),
                         new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0]))));
 
                 // print
-                localSubmitter.printResults(60, TimeUnit.SECONDS);
+                localSubmitter.printResults(60, 1, TimeUnit.SECONDS);
             } finally {
                 // kill
                 localSubmitter.kill(prodTpName);

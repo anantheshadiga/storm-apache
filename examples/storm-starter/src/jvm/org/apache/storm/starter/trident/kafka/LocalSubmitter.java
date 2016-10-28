@@ -62,8 +62,8 @@ public class LocalSubmitter {
     /**
      * Prints the DRPC results for the amount of time specified
      */
-    public void printResults(int time, TimeUnit unit) {
-        for (int i = 0; i < time; i++) {
+    public void printResults(int num, int time, TimeUnit unit) {
+        for (int i = 0; i < num; i++) {
             try {
                 LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
                 System.out.println();
