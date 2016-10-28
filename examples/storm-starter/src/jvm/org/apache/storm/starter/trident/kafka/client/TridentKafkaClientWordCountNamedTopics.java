@@ -16,7 +16,7 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident;
+package org.apache.storm.starter.trident.kafka.client;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.storm.kafka.spout.KafkaSpoutConfig;
@@ -29,6 +29,8 @@ import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder;
 import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilderNamedTopics;
 import org.apache.storm.kafka.spout.trident.KafkaTridentSpoutManager;
 import org.apache.storm.kafka.spout.trident.KafkaTridentSpoutOpaque;
+import org.apache.storm.starter.trident.DebugMemoryMapState;
+import org.apache.storm.starter.trident.kafka.TridentKafkaWordCount;
 import org.apache.storm.trident.Stream;
 import org.apache.storm.trident.TridentState;
 import org.apache.storm.trident.TridentTopology;
@@ -92,17 +94,13 @@ public class TridentKafkaClientWordCountNamedTopics extends TridentKafkaWordCoun
     }
 
     protected KafkaSpoutRetryService getRetryService() {
-        return new KafkaSpoutRetryExponentialBackoff(getTimeInterval(500, TimeUnit.MICROSECONDS),
-                KafkaSpoutRetryExponentialBackoff.TimeInterval.milliSeconds(2), Integer.MAX_VALUE, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(10));
-    }
-
-    private static KafkaSpoutRetryExponentialBackoff.TimeInterval getTimeInterval(long delay, TimeUnit timeUnit) {
-        return new KafkaSpoutRetryExponentialBackoff.TimeInterval(delay, timeUnit);
+        return new KafkaSpoutRetryExponentialBackoff(new KafkaSpoutRetryExponentialBackoff.TimeInterval(500L, TimeUnit.MICROSECONDS),
+                KafkaSpoutRetryExponentialBackoff.TimeInterval.milliSeconds(2),
+                Integer.MAX_VALUE, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(10));
     }
 
     protected KafkaSpoutStreams getKafkaSpoutStreams() {
-        final Fields outputFields = new Fields("str");
-        return new KafkaSpoutStreamsNamedTopics.Builder(outputFields, new String[]{"test-trident","test-trident-1"}).build();
+        return new KafkaSpoutStreamsNamedTopics.Builder(new Fields("str"), new String[]{"test-trident","test-trident-1"}).build();
     }
 
     protected static class TopicsTupleBuilder<K, V> extends KafkaSpoutTupleBuilder<K,V> {
@@ -117,6 +115,6 @@ public class TridentKafkaClientWordCountNamedTopics extends TridentKafkaWordCoun
 
     public static void main(String[] args) throws Exception {
         final String[] zkBrokerUrl = parseUrl(args);
-        runMain(args, new TridentKafkaClientWordCountNamedTopics(zkBrokerUrl[0], zkBrokerUrl[1]));
+        run(args, new TridentKafkaClientWordCountNamedTopics(zkBrokerUrl[0], zkBrokerUrl[1]));
     }
 }

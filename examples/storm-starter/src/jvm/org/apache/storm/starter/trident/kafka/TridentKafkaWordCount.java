@@ -1,29 +1,23 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at
+ *   or more contributor license agreements.  See the NOTICE file
+ *   distributed with this work for additional information
+ *   regarding copyright ownership.  The ASF licenses this file
+ *   to you under the Apache License, Version 2.0 (the
+ *   "License"); you may not use this file except in compliance
+ *   with the License.  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations
- * under the License.
- *
- * Contains some contributions under the Thrift Software License.
- * Please see doc/old-thrift-license.txt in the Thrift distribution for
- * details.
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
  */
-package org.apache.storm.starter.trident;
+package org.apache.storm.starter.trident.kafka;
 
 
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.LocalDRPC;
@@ -32,14 +26,12 @@ import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.StringScheme;
 import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
-import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
-import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
 import org.apache.storm.kafka.trident.OpaqueTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
 import org.apache.storm.spout.SchemeAsMultiScheme;
 import org.apache.storm.starter.spout.RandomSentenceSpout;
-import org.apache.storm.topology.TopologyBuilder;
+import org.apache.storm.starter.trident.DebugMemoryMapState;
 import org.apache.storm.trident.Stream;
 import org.apache.storm.trident.TridentState;
 import org.apache.storm.trident.TridentTopology;
@@ -47,6 +39,7 @@ import org.apache.storm.trident.operation.builtin.Count;
 import org.apache.storm.trident.operation.builtin.Debug;
 import org.apache.storm.trident.operation.builtin.FilterNull;
 import org.apache.storm.trident.operation.builtin.MapGet;
+import org.apache.storm.trident.spout.IOpaquePartitionedTridentSpout;
 import org.apache.storm.trident.testing.MemoryMapState;
 import org.apache.storm.trident.testing.Split;
 import org.apache.storm.tuple.Fields;
@@ -54,7 +47,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.Properties;
 
 /**
  * A sample word count trident topology using transactional kafka spout that has the following components.
@@ -88,33 +80,14 @@ public class TridentKafkaWordCount implements Serializable {
         this.brokerUrl = brokerUrl;
     }
 
-    /**
-     * Creates a transactional kafka spout that consumes any new data published to "test" topic.
-     * <p/>
-     * For more info on transactional spouts
-     * see "Transactional spouts" section in
-     * <a href="https://storm.apache.org/documentation/Trident-state"> Trident state</a> doc.
-     *
-     * @return a transactional trident kafka spout.
-     */
-    private TransactionalTridentKafkaSpout createTransactionalKafkaSpout() {
+    private static TridentKafkaConfig newTridentKafkaConfig(String zkUrl) {
         ZkHosts hosts = new ZkHosts(zkUrl);
         TridentKafkaConfig config = new TridentKafkaConfig(hosts, "test");
         config.scheme = new SchemeAsMultiScheme(new StringScheme());
 
         // Consume new data from the topic
         config.startOffsetTime = kafka.api.OffsetRequest.LatestTime();
-        return new TransactionalTridentKafkaSpout(config);
-    }
-
-    private OpaqueTridentKafkaSpout createOpaqueKafkaSpout() {
-        ZkHosts hosts = new ZkHosts(zkUrl);
-        TridentKafkaConfig config = new TridentKafkaConfig(hosts, "test");
-        config.scheme = new SchemeAsMultiScheme(new StringScheme());
-
-        // Consume new data from the topic
-        config.startOffsetTime = kafka.api.OffsetRequest.LatestTime();
-        return new OpaqueTridentKafkaSpout(config);
+        return config;
     }
 
 
@@ -128,14 +101,19 @@ public class TridentKafkaWordCount implements Serializable {
     }
 
     protected TridentState addTridentState(TridentTopology tridentTopology) {
-//        final Stream spoutStream = tridentTopology.newStream("spout1", createTransactionalKafkaSpout()).parallelismHint(1);
-        final Stream spoutStream = tridentTopology.newStream("spout1", createOpaqueKafkaSpout()).parallelismHint(1);
+        // Creates a transactional/opaque kafka spout that consumes any new data published to "test" topic.
+
+        /*final Stream spoutStream = tridentTopology.newStream("spout1",
+                new TransactionalTridentKafkaSpout(newTridentKafkaConfig())).parallelismHint(1);*/
+        final Stream spoutStream = tridentTopology.newStream("spout1",
+                new OpaqueTridentKafkaSpout(newTridentKafkaConfig())).parallelismHint(1);
 
         return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))
                 .each(new Fields("str"), new Split(), new Fields("word"))
                 .groupBy(new Fields("word"))
                 .persistentAggregate(new DebugMemoryMapState.Factory(), new Count(), new Fields("count"));
     }
+
 
     /**
      * Creates a trident topology that consumes sentences from the kafka "test" topic using a
@@ -150,57 +128,23 @@ public class TridentKafkaWordCount implements Serializable {
         return tridentTopology.build();
     }
 
-    /**
-     * Return the consumer topology config.
-     *
-     * @return the topology config
-     */
     public Config getConsumerConfig() {
         Config conf = new Config();
         conf.setMaxSpoutPending(20);
         conf.setMaxTaskParallelism(1);
-        //  conf.setDebug(true);
+        return conf;
+    }
+
+    public Config getProducerConfig() {
+        Config conf = new Config();
+        conf.setMaxSpoutPending(20);
+        conf.setNumWorkers(1);
         return conf;
     }
 
     /**
-     * A topology that produces random sentences using {@link RandomSentenceSpout} and
-     * publishes the sentences using a KafkaBolt to kafka "test" topic.
-     *
-     * @return the storm topology
-     */
-    public StormTopology buildProducerTopology(Properties prop) {
-        TopologyBuilder builder = new TopologyBuilder();
-        builder.setSpout("spout", new RandomSentenceSpout.TimeStamped(""), 2);
-        /**
-         * The output field of the RandomSentenceSpout ("word") is provided as the boltMessageField
-         * so that this gets written out as the message in the kafka topic.
-         */
-        KafkaBolt bolt = new KafkaBolt().withProducerProperties(prop)
-                .withTopicSelector(new DefaultTopicSelector("test"))
-                .withTupleToKafkaMapper(new FieldNameBasedTupleToKafkaMapper("key", "word"));
-        builder.setBolt("forwardToKafka", bolt, 1).shuffleGrouping("spout");
-        return builder.createTopology();
-    }
-
-    /**
-     * Returns the storm config for the topology that publishes sentences to kafka "test" topic using a kafka bolt.
-     * The KAFKA_BROKER_PROPERTIES is needed for the KafkaBolt.
-     *
-     * @return the topology config
-     */
-    public Properties getProducerConfig() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "storm-kafka-producer");
-        return props;
-    }
-
-    /**
      * <p>
-     * To run this topology ensure you have a kafka broker running.
+     * To run this topology it is required that you have a kafka broker running.
      * </p>
      * Create a topic 'test' with command line,
      * <pre>
@@ -223,7 +167,7 @@ public class TridentKafkaWordCount implements Serializable {
      */
     public static void main(String[] args) throws Exception {
         final String[] zkBrokerUrl = parseUrl(args);
-        runMain(args, new TridentKafkaWordCount(zkBrokerUrl[0], zkBrokerUrl[1]));
+        run(args, new TridentKafkaWordCount(zkBrokerUrl[0], zkBrokerUrl[1]));
     }
 
     protected static String[] parseUrl(String[] args) {
@@ -245,15 +189,22 @@ public class TridentKafkaWordCount implements Serializable {
         return new String[]{zkUrl, brokerUrl};
     }
 
-    protected static void runMain(String[] args, TridentKafkaWordCount wordCount) throws Exception {
+    protected static void run(String[] args, TridentKafkaWordCount wordCount) throws Exception {
+        final String[] zkBrokerUrl = parseUrl(args);
+
+        Config conf = new Config();
+        conf.setMaxSpoutPending(20);
+
         if (args.length == 3)  {
-            Config conf = new Config();
-            conf.setMaxSpoutPending(20);
             conf.setNumWorkers(1);
+
+            // submit the PRODUCER topology.
+            StormSubmitter.submitTopology(args[2] + "-producer", getProducerConfig(), KafkaProducerTopology.create(brokerUrl, topicName));
+
             // submit the CONSUMER topology.
-            StormSubmitter.submitTopology(args[2] + "-consumer", conf, wordCount.buildConsumerTopology(null));
-            // submit the producer topology.
-            StormSubmitter.submitTopology(args[2] + "-producer", conf, wordCount.buildProducerTopology(wordCount.getProducerConfig()));
+            StormSubmitter.submitTopology(args[2] + "-consumer", getConsumerConfig(), TridentKafkaConsumerTopology.newTopology(drpc, tridentSpout));
+            TridentKafkaConsumerTopology.submitRemote(args[2] + "-consumer", new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0])));
+
         } else {
             LocalDRPC drpc = new LocalDRPC();
             LocalCluster cluster = new LocalCluster();
@@ -267,6 +218,23 @@ public class TridentKafkaWordCount implements Serializable {
 //            conf.setDebug(true);
             cluster.submitTopology("kafkaBolt", conf, wordCount.buildProducerTopology(wordCount.getProducerConfig()));
 
+
+            IOpaquePartitionedTridentSpout tridentSpout;
+
+            final String prodTpName = null;
+            final String brokerUrl;
+            final String topicName;
+
+            // submit the PRODUCER topology.
+            StormSubmitter.submitTopology(prodTpName, getProducerConfig(), KafkaProducerTopology.create(brokerUrl, topicName));
+
+            final String consTpName = null;
+            // submit the CONSUMER topology.
+            StormSubmitter.submitTopology(consTpName, getConsumerConfig(), TridentKafkaConsumerTopology.newTopology(drpc, tridentSpout));
+
+
+            // submit the CONSUMER topology.
+
             // keep querying the word counts for a minute.
             for (int i = 0; i < 60; i++) {
                 LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
@@ -277,6 +245,43 @@ public class TridentKafkaWordCount implements Serializable {
             cluster.killTopology("kafkaBolt");
             cluster.killTopology("wordCounter");
             cluster.shutdown();
+        }
+
+        class Submitter {
+            Config config;
+            String[] args;
+
+            void submitProducerTopology() {
+
+            }
+
+            void submitConsumerTopology() {
+
+            }
+
+            void submitLocalProducerTopology(String name, StormTopology topology) {
+                LocalDRPC drpc = new LocalDRPC();
+                LocalCluster cluster = new LocalCluster();
+                cluster.submitTopology(name, conf, topology);
+            }
+
+            void submitLocalConsumerTopology() {
+
+            }
+
+            public Config getConsumerConfig() {
+                Config conf = new Config();
+                conf.setMaxSpoutPending(20);
+                conf.setMaxTaskParallelism(1);
+                return conf;
+            }
+
+            public Config getProducerConfig() {
+                Config conf = new Config();
+                conf.setMaxSpoutPending(20);
+                conf.setNumWorkers(1);
+                return conf;
+            }
         }
     }
 }

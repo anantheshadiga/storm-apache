@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * This defines a transactional spout which does *not* necessarily
+ * This defines a transactional spout which does *not* necessaIOpaquePartitionedTridentSpoutrily
  * replay the same batch every time it emits a batch for a transaction id.
  * 
  */

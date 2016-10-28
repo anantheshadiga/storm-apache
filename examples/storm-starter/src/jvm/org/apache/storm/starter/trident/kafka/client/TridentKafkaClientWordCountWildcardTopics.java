@@ -16,7 +16,7 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident;
+package org.apache.storm.starter.trident.kafka.client;
 
 import org.apache.storm.kafka.spout.KafkaSpoutStream;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;
@@ -36,7 +36,7 @@ public class TridentKafkaClientWordCountWildcardTopics extends TridentKafkaClien
 
     public static void main(String[] args) throws Exception {
         final String[] zkBrokerUrl = parseUrl(args);
-        runMain(args, new TridentKafkaClientWordCountWildcardTopics(zkBrokerUrl[0], zkBrokerUrl[1]));
+        run(args, new TridentKafkaClientWordCountWildcardTopics(zkBrokerUrl[0], zkBrokerUrl[1]));
     }
 
     protected KafkaSpoutTuplesBuilder<String, String> getTuplesBuilder() {
