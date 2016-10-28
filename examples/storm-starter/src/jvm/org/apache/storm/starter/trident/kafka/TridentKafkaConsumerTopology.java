@@ -32,20 +32,43 @@ import org.apache.storm.trident.operation.builtin.Count;
 import org.apache.storm.trident.operation.builtin.Debug;
 import org.apache.storm.trident.operation.builtin.FilterNull;
 import org.apache.storm.trident.operation.builtin.MapGet;
-import org.apache.storm.trident.spout.IOpaquePartitionedTridentSpout;
+import org.apache.storm.trident.spout.ITridentDataSource;
 import org.apache.storm.trident.testing.MemoryMapState;
 import org.apache.storm.trident.testing.Split;
 import org.apache.storm.tuple.Fields;
+import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TridentKafkaConsumerTopology {
+    protected static final Logger LOG = LoggerFactory.getLogger(TridentKafkaConsumerTopology.class);
 
-    public static void submitLocal(String name, IOpaquePartitionedTridentSpout tridentSpout) {
-        LocalDRPC drpc = new LocalDRPC();
-        LocalCluster cluster = new LocalCluster();
+    public static void submitLocal(String name, ITridentDataSource tridentSpout, LocalDRPC drpc, LocalCluster cluster) {
         cluster.submitTopology(name, newConsumerConfig(), newTopology(drpc, tridentSpout));
     }
 
-    public static void submitRemote(String name, IOpaquePartitionedTridentSpout tridentSpout) {
+    public static void printResults(LocalDRPC drpc) {
+        // keep querying the word counts for a minute.
+        for (int i = 0; i < 60; i++) {
+            try {
+                LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
+                System.out.println();
+                Thread.sleep(1000);
+            } catch (TException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static void kill (LocalCluster cluster, String name) {
+        cluster.killTopology(name);
+    }
+
+    public static void kill (LocalCluster cluster, String name) {
+        cluster.killTopology(name);
+    }
+
+    public static void submitRemote(String name, ITridentDataSource tridentSpout) {
         try {
             StormSubmitter.submitTopology(name, newConsumerConfig(), newTopology(null, tridentSpout));
         } catch (Exception e) {
@@ -54,18 +77,19 @@ public class TridentKafkaConsumerTopology {
     }
 
     /**
-     * See {@link TridentKafkaConsumerTopology#newTopology(LocalDRPC, IOpaquePartitionedTridentSpout)}
+     * See {@link TridentKafkaConsumerTopology#newTopology(LocalDRPC, ITridentDataSource)}
      */
-    public static StormTopology newTopology(IOpaquePartitionedTridentSpout tridentSpout) {
+    public static StormTopology newTopology(ITridentDataSource tridentSpout) {
         return newTopology(null, tridentSpout);
     }
 
     /**
      * @param drpc The DRPC stream to be used in querying the word counts. Can be null in distributed mode
+     * @param tridentSpout
      * @return a trident topology that consumes sentences from the kafka topic specified using a
      * {@link TransactionalTridentKafkaSpout} computes the word count and stores it in a {@link MemoryMapState}.
      */
-    public static StormTopology newTopology(LocalDRPC drpc, IOpaquePartitionedTridentSpout tridentSpout) {
+    public static StormTopology newTopology(LocalDRPC drpc, ITridentDataSource tridentSpout) {
         final TridentTopology tridentTopology = new TridentTopology();
         addDRPCStream(tridentTopology, addTridentState(tridentTopology, tridentSpout), drpc);
         return tridentTopology.build();
@@ -80,7 +104,7 @@ public class TridentKafkaConsumerTopology {
                 .project(new Fields("word", "count"));
     }
 
-    private static TridentState addTridentState(TridentTopology tridentTopology, IOpaquePartitionedTridentSpout tridentSpout) {
+    private static TridentState addTridentState(TridentTopology tridentTopology, ITridentDataSource tridentSpout) {
         final Stream spoutStream = tridentTopology.newStream("spout1", tridentSpout).parallelismHint(1);
 
         return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))

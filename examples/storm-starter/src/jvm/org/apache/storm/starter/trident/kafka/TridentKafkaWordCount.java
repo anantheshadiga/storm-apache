@@ -192,25 +192,22 @@ public class TridentKafkaWordCount implements Serializable {
     protected static void run(String[] args, TridentKafkaWordCount wordCount) throws Exception {
         final String[] zkBrokerUrl = parseUrl(args);
 
-        Config conf = new Config();
-        conf.setMaxSpoutPending(20);
-
         if (args.length == 3)  {
-            conf.setNumWorkers(1);
-
             // submit the PRODUCER topology.
             StormSubmitter.submitTopology(args[2] + "-producer", getProducerConfig(), KafkaProducerTopology.create(brokerUrl, topicName));
 
             // submit the CONSUMER topology.
-            StormSubmitter.submitTopology(args[2] + "-consumer", getConsumerConfig(), TridentKafkaConsumerTopology.newTopology(drpc, tridentSpout));
-            TridentKafkaConsumerTopology.submitRemote(args[2] + "-consumer", new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0])));
-
+            TridentKafkaConsumerTopology.submitRemote(args[2] + "-consumer",
+                    new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0])));
         } else {
+            // TODO: Delete
             LocalDRPC drpc = new LocalDRPC();
             LocalCluster cluster = new LocalCluster();
 
             // submit the CONSUMER topology.
-            cluster.submitTopology("wordCounter", wordCount.getConsumerConfig(), wordCount.buildConsumerTopology(drpc));
+            TridentKafkaConsumerTopology.submitRemote("wordCounter",
+                    new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0])));
+
 
             // submit the PRODUCER topology.
             Config conf = new Config();
