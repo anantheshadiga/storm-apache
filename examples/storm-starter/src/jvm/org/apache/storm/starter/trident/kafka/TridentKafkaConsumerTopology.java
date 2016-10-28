@@ -19,7 +19,6 @@
 package org.apache.storm.starter.trident.kafka;
 
 import org.apache.storm.Config;
-import org.apache.storm.LocalCluster;
 import org.apache.storm.LocalDRPC;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
@@ -36,41 +35,15 @@ import org.apache.storm.trident.spout.ITridentDataSource;
 import org.apache.storm.trident.testing.MemoryMapState;
 import org.apache.storm.trident.testing.Split;
 import org.apache.storm.tuple.Fields;
-import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class TridentKafkaConsumerTopology {
     protected static final Logger LOG = LoggerFactory.getLogger(TridentKafkaConsumerTopology.class);
 
-    public static void submitLocal(String name, ITridentDataSource tridentSpout, LocalDRPC drpc, LocalCluster cluster) {
-        cluster.submitTopology(name, newConsumerConfig(), newTopology(drpc, tridentSpout));
-    }
-
-    public static void printResults(LocalDRPC drpc) {
-        // keep querying the word counts for a minute.
-        for (int i = 0; i < 60; i++) {
-            try {
-                LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
-                System.out.println();
-                Thread.sleep(1000);
-            } catch (TException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    public static void kill (LocalCluster cluster, String name) {
-        cluster.killTopology(name);
-    }
-
-    public static void kill (LocalCluster cluster, String name) {
-        cluster.killTopology(name);
-    }
-
     public static void submitRemote(String name, ITridentDataSource tridentSpout) {
         try {
-            StormSubmitter.submitTopology(name, newConsumerConfig(), newTopology(null, tridentSpout));
+            StormSubmitter.submitTopology(name, newTpConfig(), newTopology(null, tridentSpout));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -113,7 +86,7 @@ public class TridentKafkaConsumerTopology {
                 .persistentAggregate(new DebugMemoryMapState.Factory(), new Count(), new Fields("count"));
     }
 
-    private static Config newConsumerConfig() {
+    private static Config newTpConfig() {
         Config conf = new Config();
         conf.setMaxSpoutPending(20);
         conf.setMaxTaskParallelism(1);

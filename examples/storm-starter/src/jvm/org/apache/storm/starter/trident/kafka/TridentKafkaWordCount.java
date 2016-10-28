@@ -26,7 +26,6 @@ import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.StringScheme;
 import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
-import org.apache.storm.kafka.trident.OpaqueTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
 import org.apache.storm.kafka.trident.TridentKafkaConfig;
 import org.apache.storm.spout.SchemeAsMultiScheme;
@@ -47,6 +46,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A sample word count trident topology using transactional kafka spout that has the following components.
@@ -103,10 +103,10 @@ public class TridentKafkaWordCount implements Serializable {
     protected TridentState addTridentState(TridentTopology tridentTopology) {
         // Creates a transactional/opaque kafka spout that consumes any new data published to "test" topic.
 
-        /*final Stream spoutStream = tridentTopology.newStream("spout1",
-                new TransactionalTridentKafkaSpout(newTridentKafkaConfig())).parallelismHint(1);*/
         final Stream spoutStream = tridentTopology.newStream("spout1",
-                new OpaqueTridentKafkaSpout(newTridentKafkaConfig())).parallelismHint(1);
+                new TransactionalTridentKafkaSpout(newTridentKafkaConfig(""))).parallelismHint(1);
+        /*final Stream spoutStream = tridentTopology.newStream("spout1",
+                new OpaqueTridentKafkaSpout(newTridentKafkaConfig(""))).parallelismHint(1);*/
 
         return spoutStream.each(spoutStream.getOutputFields(), new Debug(true))
                 .each(new Fields("str"), new Split(), new Fields("word"))
@@ -191,10 +191,14 @@ public class TridentKafkaWordCount implements Serializable {
 
     protected static void run(String[] args, TridentKafkaWordCount wordCount) throws Exception {
         final String[] zkBrokerUrl = parseUrl(args);
+        String prodTpName;
+        String consTpName;
+        String brokerUrl;
+        String topicName;
 
         if (args.length == 3)  {
             // submit the PRODUCER topology.
-            StormSubmitter.submitTopology(args[2] + "-producer", getProducerConfig(), KafkaProducerTopology.create(brokerUrl, topicName));
+            StormSubmitter.submitTopology(args[2] + "-producer", getProducerConfig(), KafkaProducerTopology.newTopology(brokerUrl, topicName));
 
             // submit the CONSUMER topology.
             TridentKafkaConsumerTopology.submitRemote(args[2] + "-consumer",
@@ -205,6 +209,7 @@ public class TridentKafkaWordCount implements Serializable {
             LocalCluster cluster = new LocalCluster();
 
             // submit the CONSUMER topology.
+            StormSubmitter.submitTopology();
             TridentKafkaConsumerTopology.submitRemote("wordCounter",
                     new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0])));
 
@@ -218,66 +223,46 @@ public class TridentKafkaWordCount implements Serializable {
 
             IOpaquePartitionedTridentSpout tridentSpout;
 
-            final String prodTpName = null;
-            final String brokerUrl;
-            final String topicName;
+
 
             // submit the PRODUCER topology.
-            StormSubmitter.submitTopology(prodTpName, getProducerConfig(), KafkaProducerTopology.create(brokerUrl, topicName));
+            StormSubmitter.submitTopology(prodTpName, getProducerConfig(), KafkaProducerTopology.newTopology(brokerUrl, topicName));
 
-            final String consTpName = null;
             // submit the CONSUMER topology.
             StormSubmitter.submitTopology(consTpName, getConsumerConfig(), TridentKafkaConsumerTopology.newTopology(drpc, tridentSpout));
 
 
             // submit the CONSUMER topology.
 
-            // keep querying the word counts for a minute.
-            for (int i = 0; i < 60; i++) {
-                LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
-                System.out.println();
-                Thread.sleep(1000);
-            }
 
-            cluster.killTopology("kafkaBolt");
-            cluster.killTopology("wordCounter");
-            cluster.shutdown();
-        }
 
-        class Submitter {
-            Config config;
-            String[] args;
 
-            void submitProducerTopology() {
+            
+            //submit remote
+            // Producer
+            Config tpConf = LocalSubmitter.defaultConfig();
+            StormSubmitter.submitTopology(prodTpName, tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[0], topicName));
+            // Consumer
+            StormSubmitter.submitTopology(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(
+                    new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0]))));
 
-            }
+            //submit local
+            LocalSubmitter localSubmitter = new LocalSubmitter(drpc, cluster);
+            try {
+                // Producer
+                localSubmitter.submit(prodTpName, tpConf, KafkaProducerTopology.newTopology(zkBrokerUrl[0], topicName));
+                // Consumer
+                localSubmitter.submit(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(drpc,
+                        new TransactionalTridentKafkaSpout(newTridentKafkaConfig(zkBrokerUrl[0]))));
 
-            void submitConsumerTopology() {
-
-            }
-
-            void submitLocalProducerTopology(String name, StormTopology topology) {
-                LocalDRPC drpc = new LocalDRPC();
-                LocalCluster cluster = new LocalCluster();
-                cluster.submitTopology(name, conf, topology);
-            }
-
-            void submitLocalConsumerTopology() {
-
-            }
-
-            public Config getConsumerConfig() {
-                Config conf = new Config();
-                conf.setMaxSpoutPending(20);
-                conf.setMaxTaskParallelism(1);
-                return conf;
-            }
-
-            public Config getProducerConfig() {
-                Config conf = new Config();
-                conf.setMaxSpoutPending(20);
-                conf.setNumWorkers(1);
-                return conf;
+                // print
+                localSubmitter.printResults(60, TimeUnit.SECONDS);
+            } finally {
+                // kill
+                localSubmitter.kill(prodTpName);
+                localSubmitter.kill(consTpName);
+                // shutdown
+                localSubmitter.shutdown();
             }
         }
     }

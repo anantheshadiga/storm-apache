@@ -35,7 +35,7 @@ public class KafkaProducerTopology {
      * @return A Storm topology that produces random sentences using {@link RandomSentenceSpout} and
      * uses a {@link KafkaBolt} to publish the sentences to the kafka topic specified
      */
-    public static StormTopology create(String brokerUrl, String topicName) {
+    public static StormTopology newTopology(String brokerUrl, String topicName) {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setSpout("spout", new RandomSentenceSpout.TimeStamped(""), 2);
 
