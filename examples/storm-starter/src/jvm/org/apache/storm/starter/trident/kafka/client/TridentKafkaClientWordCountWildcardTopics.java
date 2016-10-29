@@ -34,11 +34,11 @@ public class TridentKafkaClientWordCountWildcardTopics extends TridentKafkaClien
         new TridentKafkaClientWordCountWildcardTopics().run(args);
     }
 
-    protected KafkaSpoutTuplesBuilder<String, String> getTuplesBuilder() {
+    protected KafkaSpoutTuplesBuilder<String, String> newTuplesBuilder() {
         return new KafkaSpoutTuplesBuilderWildcardTopics<>(new TopicsTupleBuilder<>(TOPIC_WILDCARD_PATTERN));
     }
 
-    protected KafkaSpoutStreams getKafkaSpoutStreams() {
+    protected KafkaSpoutStreams newKafkaSpoutStreams() {
         final Fields outputFields = new Fields("str");
         final KafkaSpoutStream kafkaSpoutStream = new KafkaSpoutStream(outputFields, Pattern.compile(TOPIC_WILDCARD_PATTERN));
         return new KafkaSpoutStreamsWildcardTopics(kafkaSpoutStream);

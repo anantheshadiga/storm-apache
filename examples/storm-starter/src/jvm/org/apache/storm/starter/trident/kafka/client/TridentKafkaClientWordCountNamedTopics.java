@@ -40,6 +40,7 @@ import org.apache.storm.starter.trident.kafka.TridentKafkaConsumerTopology;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,26 +49,26 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.storm.kafka.spout.KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST;
 
 public class TridentKafkaClientWordCountNamedTopics {
-    protected static final String TOPIC_1 = "test-trident";
-    protected static final String TOPIC_2 = "test-trident-1";
+    private static final String TOPIC_1 = "test-trident";
+    private static final String TOPIC_2 = "test-trident-1";
+    private static final String KAFKA_LOCAL_BROKER = "localhost:9092";
 
-    private KafkaTridentSpoutOpaque<String, String> createOpaqueKafkaSpoutNew() {
-        return new KafkaTridentSpoutOpaque<>(
-                new KafkaTridentSpoutManager<>(
-                        getKafkaSpoutConfig(
-                        getKafkaSpoutStreams())));
+    private KafkaTridentSpoutOpaque<String, String> newKafkaTridentSpoutOpaque() {
+        return new KafkaTridentSpoutOpaque<>(new KafkaTridentSpoutManager<>(
+                        newKafkaSpoutConfig(
+                        newKafkaSpoutStreams())));
     }
 
-    private KafkaSpoutConfig<String,String> getKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
-        return new KafkaSpoutConfig.Builder<String, String>(getKafkaConsumerProps(),
-                    kafkaSpoutStreams, getTuplesBuilder(), getRetryService())
+    private KafkaSpoutConfig<String,String> newKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
+        return new KafkaSpoutConfig.Builder<String, String>(newKafkaConsumerProps(),
+                    kafkaSpoutStreams, newTuplesBuilder(), newRetryService())
                 .setOffsetCommitPeriodMs(10_000)
                 .setFirstPollOffsetStrategy(EARLIEST)
                 .setMaxUncommittedOffsets(250)
                 .build();
     }
 
-    protected Map<String,Object> getKafkaConsumerProps() {
+    protected Map<String,Object> newKafkaConsumerProps() {
         Map<String, Object> props = new HashMap<>();
         props.put(KafkaSpoutConfig.Consumer.BOOTSTRAP_SERVERS, "127.0.0.1:9092");
         props.put(KafkaSpoutConfig.Consumer.GROUP_ID, "kafkaSpoutTestGroup");
@@ -77,19 +78,19 @@ public class TridentKafkaClientWordCountNamedTopics {
         return props;
     }
 
-    protected KafkaSpoutTuplesBuilder<String, String> getTuplesBuilder() {
+    protected KafkaSpoutTuplesBuilder<String, String> newTuplesBuilder() {
         return new KafkaSpoutTuplesBuilderNamedTopics.Builder<>(
                 new TopicsTupleBuilder<String, String>(TOPIC_1, TOPIC_2))
                 .build();
     }
 
-    protected KafkaSpoutRetryService getRetryService() {
+    protected KafkaSpoutRetryService newRetryService() {
         return new KafkaSpoutRetryExponentialBackoff(new KafkaSpoutRetryExponentialBackoff.TimeInterval(500L, TimeUnit.MICROSECONDS),
                 KafkaSpoutRetryExponentialBackoff.TimeInterval.milliSeconds(2),
                 Integer.MAX_VALUE, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(10));
     }
 
-    protected KafkaSpoutStreams getKafkaSpoutStreams() {
+    protected KafkaSpoutStreams newKafkaSpoutStreams() {
         return new KafkaSpoutStreamsNamedTopics.Builder(new Fields("str"), new String[]{"test-trident","test-trident-1"}).build();
     }
 
@@ -108,50 +109,50 @@ public class TridentKafkaClientWordCountNamedTopics {
     }
 
     protected void run(String[] args) throws AlreadyAliveException, InvalidTopologyException, AuthorizationException {
-        if (args.length < 3) {
-            System.out.printf("Usage: %s %s %s %s [%s]\n", getClass().getSimpleName(),
+        if (args.length > 0 && Arrays.stream(args).anyMatch(option -> option.equals("-h"))) {
+            System.out.printf("Usage: java %s [%s] [%s] [%s] [%s]\n", getClass().getName(),
                     "broker_host:broker_port", "topic1", "topic2", "topology_name");
-        }
+        } else {
+            final String brokerUrl = args.length > 0 ? args[0] : KAFKA_LOCAL_BROKER;
+            final String topic1 = args.length > 1 ? args[1] : TOPIC_1;
+            final String topic2 = args.length > 2 ? args[2] : TOPIC_2;
 
-        final String brokerUrl = args.length > 0 ? args[0] : "localhost:9092";
-        final String topic1 = args.length > 1 ? args[1] : TOPIC_1;
-        final String topic2 = args.length > 2 ? args[2] : TOPIC_2;
+            System.out.printf("Running with broker_url: [%s], topics: [%s, %s]\n", brokerUrl, topic1, topic2);
 
-        System.out.printf("Running with broker_url: [%s], topics: [%s, %s]\n", brokerUrl, topic1, topic2);
+            Config tpConf = LocalSubmitter.defaultConfig();
 
-        Config tpConf = LocalSubmitter.defaultConfig();
-
-        if (args.length == 4)  { //Submit Remote
-            // Producers
-            StormSubmitter.submitTopology(topic1 + "-producer", tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic1));
-            StormSubmitter.submitTopology(topic2 + "-producer", tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic2));
-            // Consumer
-            StormSubmitter.submitTopology("topics-consumer", tpConf, TridentKafkaConsumerTopology.newTopology(createOpaqueKafkaSpoutNew()));
-        } else { //Submit Local
-
-            final LocalSubmitter localSubmitter = LocalSubmitter.newInstance();
-            final String topic1Tp = "topic1-producer";
-            final String topic2Tp = "topic2-producer";
-            final String consTpName = "topics-consumer";
-
-            try {
+            if (args.length == 4) { //Submit Remote
                 // Producers
-                localSubmitter.submit(topic1Tp, tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic1));
-                localSubmitter.submit(topic2Tp, tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic2));
+                StormSubmitter.submitTopology(topic1 + "-producer", tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic1));
+                StormSubmitter.submitTopology(topic2 + "-producer", tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic2));
                 // Consumer
-                localSubmitter.submit(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(
-                        localSubmitter.getDrpc(), createOpaqueKafkaSpoutNew()));
+                StormSubmitter.submitTopology("topics-consumer", tpConf, TridentKafkaConsumerTopology.newTopology(newKafkaTridentSpoutOpaque()));
+            } else { //Submit Local
 
-                // print
-                localSubmitter.printResults(10, 1, TimeUnit.SECONDS);
-            } finally {
-                // kill
-                localSubmitter.kill(topic1Tp);
-                localSubmitter.kill(topic2Tp);
-                localSubmitter.kill(consTpName);
-                // shutdown
-                localSubmitter.shutdown();
-                System.exit(0);
+                final LocalSubmitter localSubmitter = LocalSubmitter.newInstance();
+                final String topic1Tp = "topic1-producer";
+                final String topic2Tp = "topic2-producer";
+                final String consTpName = "topics-consumer";
+
+                try {
+                    // Producers
+                    localSubmitter.submit(topic1Tp, tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic1));
+                    localSubmitter.submit(topic2Tp, tpConf, KafkaProducerTopology.newTopology(brokerUrl, topic2));
+                    // Consumer
+                    localSubmitter.submit(consTpName, tpConf, TridentKafkaConsumerTopology.newTopology(
+                            localSubmitter.getDrpc(), newKafkaTridentSpoutOpaque()));
+
+                    // print
+                    localSubmitter.printResults(30, 1, TimeUnit.SECONDS);
+                } finally {
+                    // kill
+                    localSubmitter.kill(topic1Tp);
+                    localSubmitter.kill(topic2Tp);
+                    localSubmitter.kill(consTpName);
+                    // shutdown
+                    localSubmitter.shutdown();
+                    System.exit(0);
+                }
             }
         }
     }
