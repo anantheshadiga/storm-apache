@@ -30,10 +30,6 @@ import java.util.regex.Pattern;
 public class TridentKafkaClientWordCountWildcardTopics extends TridentKafkaClientWordCountNamedTopics {
     private static final String TOPIC_WILDCARD_PATTERN = "test-trident(-1)?";
 
-    public static void main(String[] args) throws Exception {
-        new TridentKafkaClientWordCountWildcardTopics().run(args);
-    }
-
     protected KafkaSpoutTuplesBuilder<String, String> newTuplesBuilder() {
         return new KafkaSpoutTuplesBuilderWildcardTopics<>(new TopicsTupleBuilder<>(TOPIC_WILDCARD_PATTERN));
     }
@@ -42,5 +38,9 @@ public class TridentKafkaClientWordCountWildcardTopics extends TridentKafkaClien
         final Fields outputFields = new Fields("str");
         final KafkaSpoutStream kafkaSpoutStream = new KafkaSpoutStream(outputFields, Pattern.compile(TOPIC_WILDCARD_PATTERN));
         return new KafkaSpoutStreamsWildcardTopics(kafkaSpoutStream);
+    }
+
+    public static void main(String[] args) throws Exception {
+        new TridentKafkaClientWordCountWildcardTopics().run(args);
     }
 }

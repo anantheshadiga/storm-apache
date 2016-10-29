@@ -143,7 +143,7 @@ public class TridentKafkaClientWordCountNamedTopics {
                             localSubmitter.getDrpc(), newKafkaTridentSpoutOpaque()));
 
                     // print
-                    localSubmitter.printResults(30, 1, TimeUnit.SECONDS);
+                    localSubmitter.printResults(15, 1, TimeUnit.SECONDS);
                 } finally {
                     // kill
                     localSubmitter.kill(topic1Tp);
