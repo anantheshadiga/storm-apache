@@ -42,7 +42,7 @@ public class KafkaProducerTopology {
         /* The output field of the RandomSentenceSpout ("word") is provided as the boltMessageField
           so that this gets written out as the message in the kafka topic. */
         final KafkaBolt<String, String> bolt = new KafkaBolt<String, String>()
-                .withProducerProperties(newProps(brokerUrl))
+                .withProducerProperties(newProps(brokerUrl, topicName))
                 .withTopicSelector(new DefaultTopicSelector(topicName))
                 .withTupleToKafkaMapper(new FieldNameBasedTupleToKafkaMapper<>("key", "word"));
 
@@ -54,12 +54,12 @@ public class KafkaProducerTopology {
     /**
      * @return the Storm config for the topology that publishes sentences to kafka using a kafka bolt.
      */
-    private static Properties newProps(final String brokerUrl) {
+    private static Properties newProps(final String brokerUrl, final String topicName) {
         return new Properties() {{
             put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl);
             put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
             put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer");
-            put(ProducerConfig.CLIENT_ID_CONFIG, "storm-kafka-producer");
+            put(ProducerConfig.CLIENT_ID_CONFIG, topicName);
         }};
     }
 }

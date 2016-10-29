@@ -30,13 +30,8 @@ import java.util.regex.Pattern;
 public class TridentKafkaClientWordCountWildcardTopics extends TridentKafkaClientWordCountNamedTopics {
     private static final String TOPIC_WILDCARD_PATTERN = "test-trident(-1)?";
 
-    public TridentKafkaClientWordCountWildcardTopics(String zkUrl, String brokerUrl) {
-        super(zkUrl, brokerUrl);
-    }
-
     public static void main(String[] args) throws Exception {
-        final String[] zkBrokerUrl = parseUrl(args);
-        run(args, new TridentKafkaClientWordCountWildcardTopics(zkBrokerUrl[0], zkBrokerUrl[1]));
+        new TridentKafkaClientWordCountWildcardTopics().run(args);
     }
 
     protected KafkaSpoutTuplesBuilder<String, String> getTuplesBuilder() {
