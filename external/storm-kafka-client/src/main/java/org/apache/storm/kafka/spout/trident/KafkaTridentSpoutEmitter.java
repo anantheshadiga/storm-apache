@@ -79,7 +79,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
 
         final TopicPartition topicPartition = partitionTs.getTopicPartition();
         KafkaTridentSpoutBatchMetadata<K, V> currentBatch = lastBatch;
-        Collection<TopicPartition> pausedTopicPartitions = Collections.EMPTY_SET;
+        Collection<TopicPartition> pausedTopicPartitions = Collections.emptySet();
 
         try {
             // pause other topic partitions to only poll from current topic partition
@@ -112,6 +112,15 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
         }
     }
 
+    /**
+     * Determines the offset of the next fetch. For failed batches lastBatchMeta is not null and contains the fetch
+     * offset of the failed batch. In this scenario the next fetch will take place at the offset of the failed batch
+     * When the previous batch is successful, lastBatchMeta is null, and the offset of the next fetch is either the
+     * offset of the last commit to kafka, or if no commit was not yet made, the offset dictated by
+     * {@link KafkaSpoutConfig.FirstPollOffsetStrategy}
+     *
+     * @return the offset of the next fetch
+     */
     private long seek(TopicPartition tp, KafkaTridentSpoutBatchMetadata<K, V> lastBatchMeta) {
         if (lastBatchMeta != null) {
             kafkaConsumer.seek(tp, lastBatchMeta.getLastOffset() + 1);  // seek next offset after last offset from previous batch
@@ -175,6 +184,7 @@ public class KafkaTridentSpoutEmitter<K,V> implements IOpaquePartitionedTridentS
 
     @Override
     public void close() {
+        kafkaConsumer.close();
         LOG.debug("Closed");
     }
 

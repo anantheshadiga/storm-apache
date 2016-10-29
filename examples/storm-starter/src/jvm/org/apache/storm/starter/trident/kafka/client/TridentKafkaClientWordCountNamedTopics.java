@@ -60,7 +60,7 @@ public class TridentKafkaClientWordCountNamedTopics {
     }
 
     private KafkaSpoutConfig<String,String> newKafkaSpoutConfig(KafkaSpoutStreams kafkaSpoutStreams) {
-        return new KafkaSpoutConfig.Builder<String, String>(newKafkaConsumerProps(),
+        return new KafkaSpoutConfig.Builder<>(newKafkaConsumerProps(),
                     kafkaSpoutStreams, newTuplesBuilder(), newRetryService())
                 .setOffsetCommitPeriodMs(10_000)
                 .setFirstPollOffsetStrategy(EARLIEST)
@@ -151,9 +151,9 @@ public class TridentKafkaClientWordCountNamedTopics {
                     localSubmitter.kill(consTpName);
                     // shutdown
                     localSubmitter.shutdown();
-                    System.exit(0);
                 }
             }
         }
+        System.exit(0);
     }
 }
