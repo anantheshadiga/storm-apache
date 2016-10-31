@@ -16,7 +16,7 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident.kafka.client;
+package org.apache.storm.kafka.trident;
 
 import org.apache.storm.kafka.spout.KafkaSpoutStream;
 import org.apache.storm.kafka.spout.KafkaSpoutStreams;

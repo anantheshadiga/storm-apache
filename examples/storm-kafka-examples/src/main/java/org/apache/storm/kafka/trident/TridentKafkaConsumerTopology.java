@@ -16,14 +16,12 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident.kafka;
+package org.apache.storm.kafka.trident;
 
 import org.apache.storm.Config;
 import org.apache.storm.LocalDRPC;
 import org.apache.storm.StormSubmitter;
 import org.apache.storm.generated.StormTopology;
-import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
-import org.apache.storm.starter.trident.DebugMemoryMapState;
 import org.apache.storm.trident.Stream;
 import org.apache.storm.trident.TridentState;
 import org.apache.storm.trident.TridentTopology;

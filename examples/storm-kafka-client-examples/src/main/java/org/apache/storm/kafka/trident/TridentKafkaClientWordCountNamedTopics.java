@@ -16,7 +16,7 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident.kafka.client;
+package org.apache.storm.kafka.trident;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.storm.Config;
@@ -34,9 +34,6 @@ import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilder;
 import org.apache.storm.kafka.spout.KafkaSpoutTuplesBuilderNamedTopics;
 import org.apache.storm.kafka.spout.trident.KafkaTridentSpoutManager;
 import org.apache.storm.kafka.spout.trident.KafkaTridentSpoutOpaque;
-import org.apache.storm.starter.trident.kafka.KafkaProducerTopology;
-import org.apache.storm.starter.trident.kafka.LocalSubmitter;
-import org.apache.storm.starter.trident.kafka.TridentKafkaConsumerTopology;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 

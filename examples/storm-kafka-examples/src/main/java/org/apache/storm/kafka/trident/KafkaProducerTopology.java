@@ -16,14 +16,13 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident.kafka;
+package org.apache.storm.kafka.trident;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.kafka.bolt.KafkaBolt;
 import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
-import org.apache.storm.starter.spout.RandomSentenceSpout;
 import org.apache.storm.topology.TopologyBuilder;
 
 import java.util.Properties;
@@ -32,8 +31,8 @@ public class KafkaProducerTopology {
     /**
      * @param brokerUrl Kafka broker URL
      * @param topicName Topic to which publish sentences
-     * @return A Storm topology that produces random sentences using {@link RandomSentenceSpout} and
-     * uses a {@link KafkaBolt} to publish the sentences to the kafka topic specified
+     * @return A Storm topology that produces random sentences using {@link RandomSentenceSpout} and uses a {@link KafkaBolt} to
+     * publish the sentences to the kafka topic specified
      */
     public static StormTopology newTopology(String brokerUrl, String topicName) {
         final TopologyBuilder builder = new TopologyBuilder();

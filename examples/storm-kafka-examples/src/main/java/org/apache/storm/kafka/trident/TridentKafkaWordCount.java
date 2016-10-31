@@ -15,7 +15,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
-package org.apache.storm.starter.trident.kafka;
+package org.apache.storm.kafka.trident;
 
 
 import org.apache.storm.Config;
@@ -23,10 +23,7 @@ import org.apache.storm.StormSubmitter;
 import org.apache.storm.kafka.StringScheme;
 import org.apache.storm.kafka.ZkHosts;
 import org.apache.storm.kafka.bolt.KafkaBolt;
-import org.apache.storm.kafka.trident.TransactionalTridentKafkaSpout;
-import org.apache.storm.kafka.trident.TridentKafkaConfig;
 import org.apache.storm.spout.SchemeAsMultiScheme;
-import org.apache.storm.starter.spout.RandomSentenceSpout;
 import org.apache.storm.trident.testing.MemoryMapState;
 
 import java.io.Serializable;
@@ -128,7 +125,7 @@ public class TridentKafkaWordCount implements Serializable {
             brokerUrl = args[1];
         }
 
-        System.out.println("Using Kafka zookeeper url: " + zkUrl + " broker url: " + brokerUrl);
+        System.out.println("Using Kafka zookeeper uHrl: " + zkUrl + " broker url: " + brokerUrl);
         return new String[]{zkUrl, brokerUrl};
     }
 
@@ -137,7 +134,7 @@ public class TridentKafkaWordCount implements Serializable {
         TridentKafkaConfig config = new TridentKafkaConfig(hosts, "test");
         config.scheme = new SchemeAsMultiScheme(new StringScheme());
 
-        // Consume new data from the topic
+        // Consume new data from the topicÓÓ
         config.startOffsetTime = kafka.api.OffsetRequest.LatestTime();
         return config;
     }

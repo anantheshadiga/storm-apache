@@ -16,13 +16,12 @@
  *   limitations under the License.
  */
 
-package org.apache.storm.starter.trident.kafka;
+package org.apache.storm.kafka.trident;
 
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
 import org.apache.storm.LocalDRPC;
 import org.apache.storm.generated.StormTopology;
-import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +67,7 @@ public class LocalSubmitter {
                 LOG.info("--- DRPC RESULT: " + drpc.execute("words", "the and apple snow jumped"));
                 System.out.println();
                 Thread.sleep(unit.toMillis(time));
-            } catch (TException | InterruptedException e) {
+            } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
