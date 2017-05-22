@@ -18,27 +18,32 @@
 package org.apache.storm.trident.topology.state;
 
 
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.api.PathAndBytesable;
+import org.apache.curator.framework.api.ProtectACLCreateModePathAndBytesable;
 import org.apache.storm.Config;
 import org.apache.storm.utils.Utils;
 import org.apache.storm.utils.ZookeeperAuthInfo;
-
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.api.ProtectACLCreateModePathAndBytesable;
-import org.apache.curator.framework.api.PathAndBytesable;
+import org.apache.zookeeper.CreateMode;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.data.ACL;
+import org.json.simple.JSONValue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.zookeeper.CreateMode;
-import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.ZooDefs;
-import org.apache.zookeeper.data.ACL;
-import org.apache.zookeeper.data.Id;
-import org.json.simple.JSONValue;
 
+/**
+ * Class that contains the logic to extract the transactional state info from zookeeper. All transactional state
+ * is kept in zookeeper. This class only contains references to Curator, which is used to get all info from zookeeper.
+ */
 public class TransactionalState {
+    private static final Logger LOG = LoggerFactory.getLogger(TransactionalState.class);
+
     CuratorFramework _curator;
     List<ACL> _zkAcls = null;
     
@@ -87,7 +92,8 @@ public class TransactionalState {
             byte[] data, List<ACL> acls, CreateMode mode) throws Exception {
         ProtectACLCreateModePathAndBytesable<String> builder =
             curator.create().creatingParentsIfNeeded();
-    
+        LOG.debug("Creating node  [path = {}],  [data = {}],  [acls = {}],  [mode = {}]", path, asString(data), acls, mode);
+
         if (acls == null) {
             if (mode == null ) {
                 TransactionalState.forPath(builder, path, data);
@@ -98,6 +104,10 @@ public class TransactionalState {
         }
 
         TransactionalState.forPath(builder.withACL(acls), path, data);
+    }
+
+    private static String asString(byte[] data) {
+        return data == null ? "null" : new String(data);
     }
 
     public void setData(String path, Object obj) {
@@ -115,6 +125,7 @@ public class TransactionalState {
                 TransactionalState.createNode(_curator, path, ser, _zkAcls,
                         CreateMode.PERSISTENT);
             }
+            LOG.debug("Set [path = {}] => [data = {}]", path, asString(ser));
         } catch(Exception e) {
             throw new RuntimeException(e);
         }        
@@ -127,16 +138,20 @@ public class TransactionalState {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+        LOG.debug("Deleted [path = {}]", path);
     }
     
     public List<String> list(String path) {
         path = "/" + path;
         try {
+            List<String> children;
             if(_curator.checkExists().forPath(path)==null) {
-                return new ArrayList<String>();
+                children = new ArrayList<>();
             } else {
-                return _curator.getChildren().forPath(path);
+                children = _curator.getChildren().forPath(path);
             }
+            LOG.debug("List [path = {}], [children = {}]", path, children);
+            return children;
         } catch(Exception e) {
             throw new RuntimeException(e);
         }   
@@ -149,11 +164,16 @@ public class TransactionalState {
     public Object getData(String path) {
         path = "/" + path;
         try {
+            Object data;
             if(_curator.checkExists().forPath(path)!=null) {
-                return JSONValue.parse(new String(_curator.getData().forPath(path), "UTF-8"));
+                // intentionally using parse() instead of parseWithException() to handle error cases as null
+                // this have been used from the start of Trident so we could treat it as safer way
+                data = JSONValue.parse(new String(_curator.getData().forPath(path), "UTF-8"));
             } else {
-                return null;
+                data = null;
             }
+            LOG.debug("Get. [path = {}] => [data = {}]", path, data);
+            return data;
         } catch(Exception e) {
             throw new RuntimeException(e);
         }

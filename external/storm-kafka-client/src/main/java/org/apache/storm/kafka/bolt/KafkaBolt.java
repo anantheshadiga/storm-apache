@@ -17,27 +17,27 @@
  */
 package org.apache.storm.kafka.bolt;
 
-import org.apache.storm.task.OutputCollector;
-import org.apache.storm.task.TopologyContext;
-import org.apache.storm.topology.OutputFieldsDeclarer;
-import org.apache.storm.topology.base.BaseRichBolt;
-import org.apache.storm.topology.base.BaseTickTupleAwareRichBolt;
-import org.apache.storm.tuple.Tuple;
-import org.apache.storm.utils.TupleUtils;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.producer.Callback;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.apache.storm.kafka.bolt.mapper.FieldNameBasedTupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.mapper.TupleToKafkaMapper;
 import org.apache.storm.kafka.bolt.selector.DefaultTopicSelector;
 import org.apache.storm.kafka.bolt.selector.KafkaTopicSelector;
-import java.util.concurrent.Future;
-import java.util.concurrent.ExecutionException;
+import org.apache.storm.task.OutputCollector;
+import org.apache.storm.task.TopologyContext;
+import org.apache.storm.topology.OutputFieldsDeclarer;
+import org.apache.storm.topology.base.BaseRichBolt;
+import org.apache.storm.tuple.Tuple;
+import org.apache.storm.utils.TupleUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 
 /**
@@ -52,7 +52,7 @@ import java.util.Properties;
  * <p/>
  * respectively.
  */
-public class KafkaBolt<K, V> extends BaseTickTupleAwareRichBolt {
+public class KafkaBolt<K, V> extends BaseRichBolt {
     private static final long serialVersionUID = -5205886631877033478L;
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaBolt.class);
@@ -131,6 +131,23 @@ public class KafkaBolt<K, V> extends BaseTickTupleAwareRichBolt {
     }
 
     @Override
+    public void execute(final Tuple tuple) {
+        if (TupleUtils.isTick(tuple)) {
+            onTickTuple(tuple);
+        } else {
+            process(tuple);
+        }
+    }
+
+
+    /**
+     * Tu support backwards compatibility to for
+     * https://issues.apache.org/jira/browse/STORM-2387
+     * https://github.com/apache/storm/blame/1.x-branch/storm-core/src/jvm/org/apache/storm/topology/base/BaseTickTupleAwareRichBolt.java
+     */
+    protected void onTickTuple(final Tuple tuple) {
+    }
+
     protected void process(final Tuple input) {
         K key = null;
         V message = null;

@@ -181,7 +181,6 @@
         <maven>3.0.0</maven>
     </prerequisites>
 
-
     <scm>
         <connection>scm:git:https://git-wip-us.apache.org/repos/asf/storm.git</connection>
         <developerConnection>scm:git:https://git-wip-us.apache.org/repos/asf/storm.git</developerConnection>
@@ -251,8 +250,12 @@
         <calcite.version>1.4.0-incubating</calcite.version>
         <jackson.version>2.6.3</jackson.version>
         <maven-surefire.version>2.18.1</maven-surefire.version>
-        <kafka.version>0.10.0.2.5.2.0-70</kafka.version>
-        <kafka.artifact.id>kafka_2.11</kafka.artifact.id>
+        <!-- Kafka version used by old storm-kafka spout code -->
+        <storm.kafka.version>0.10.0.2.5.2.0-70</storm.kafka.version>
+        <storm.kafka.artifact.id>kafka_2.11</storm.kafka.artifact.id>
+
+        <!-- kafka version used by new storm-kafka-client spout code -->
+        <storm.kafka.client.version>0.10.0.0</storm.kafka.client.version>
 
         <!-- Java and clojure build lifecycle test properties are defined here to avoid having to create a default profile -->
         <java.unit.test.exclude>org.apache.storm.testing.IntegrationTest</java.unit.test.exclude>
@@ -261,6 +264,9 @@
         <clojure.test.set>!integration.*</clojure.test.set>
         <qpid.version>0.32</qpid.version>
         <eventhubs.client.version>1.0.1</eventhubs.client.version>
+
+        <!-- see intellij profile below... This fixes an annoyance with intellij -->
+        <provided.scope>provided</provided.scope>
     </properties>
 
     <modules>
@@ -271,6 +277,8 @@
         <module>storm-buildtools/storm-maven-plugins</module>
         <module>storm-core</module>
         <module>storm-rename-hack</module>
+
+        <!-- externals -->
         <module>external/storm-kafka</module>
         <module>external/storm-hdfs</module>
         <module>external/storm-hbase</module>
@@ -286,11 +294,26 @@
         <module>external/storm-cassandra</module>
         <module>external/storm-mqtt</module>
         <module>external/storm-mongodb</module>
-        <module>examples/storm-starter</module>
         <module>external/storm-kafka-client</module>
         <module>external/storm-opentsdb</module>
         <module>external/storm-kafka-monitor</module>
         <module>external/storm-kinesis</module>
+
+        <!-- examples -->
+        <module>examples/storm-starter</module>
+        <module>examples/storm-mongodb-examples</module>
+        <module>examples/storm-redis-examples</module>
+        <module>examples/storm-opentsdb-examples</module>
+        <module>examples/storm-solr-examples</module>
+        <module>examples/storm-kafka-examples</module>
+        <module>examples/storm-kafka-client-examples</module>
+        <module>examples/storm-jdbc-examples</module>
+        <module>examples/storm-hdfs-examples</module>
+        <module>examples/storm-hbase-examples</module>
+        <module>examples/storm-hive-examples</module>
+        <module>examples/storm-elasticsearch-examples</module>
+        <module>examples/storm-mqtt-examples</module>
+        <module>examples/storm-perf</module>
     </modules>
 
     <dependencies>
@@ -304,6 +327,17 @@
     </dependencies>
 
     <profiles>
+	<!--
+            Hack to make intellij behave.
+            If you use intellij, enable this profile in your IDE.
+            It should make life easier.
+        -->
+        <profile>
+            <id>intellij</id>
+            <properties>
+                <provided.scope>compile</provided.scope>
+            </properties>
+        </profile>
 	<profile>
             <id>windows</id>
             <modules>
@@ -929,8 +963,8 @@
             </dependency>
             <dependency>
                 <groupId>org.apache.kafka</groupId>
-                <artifactId>${kafka.artifact.id}</artifactId>
-                <version>${kafka.version}</version>
+                <artifactId>${storm.kafka.artifact.id}</artifactId>
+                <version>${storm.kafka.version}</version>
                 <exclusions>
                     <exclusion>
                         <groupId>org.apache.zookeeper</groupId>
@@ -949,7 +983,7 @@
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
-                <version>${kafka.version}</version>
+                <version>${storm.kafka.client.version}</version>
             </dependency>
 
         </dependencies>

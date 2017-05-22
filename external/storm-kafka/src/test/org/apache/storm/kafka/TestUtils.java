@@ -17,18 +17,19 @@
  */
 package org.apache.storm.kafka;
 
-import org.apache.storm.Config;
+import org.apache.storm.kafka.trident.GlobalPartitionInformation;
 import org.apache.storm.utils.Utils;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+
 import kafka.api.OffsetRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
 import kafka.message.Message;
 import kafka.message.MessageAndOffset;
-import org.apache.storm.kafka.bolt.KafkaBolt;
-import org.apache.storm.kafka.trident.GlobalPartitionInformation;
-
-import java.nio.ByteBuffer;
-import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 
