@@ -49,11 +49,11 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         LOG.debug("Created {}", this);
     }
 
-    KafkaConsumer<K,V> createAndSubscribeKafkaConsumer(TopologyContext context) {
+    KafkaConsumer<K,V> createAndSubscribeKafkaConsumer(TopologyContext context, ConsumerRebalanceListener consumerRebalanceListener) {
         kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
                 kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
 
-        kafkaSpoutConfig.getSubscription().subscribe(kafkaConsumer, new KafkaSpoutConsumerRebalanceListener(), context);
+        kafkaSpoutConfig.getSubscription().subscribe(kafkaConsumer, consumerRebalanceListener, context);
         return kafkaConsumer;
     }
 
@@ -96,6 +96,7 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
                 '}';
     }
 
+    //TODO Delete
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
