@@ -49,11 +49,11 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         LOG.debug("Created {}", this);
     }
 
-    KafkaConsumer<K,V> createAndSubscribeKafkaConsumer(TopologyContext context, ConsumerRebalanceListener consumerRebalanceListener) {
+    KafkaConsumer<K,V> createAndSubscribeKafkaConsumer(TopologyContext context) {
         kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
                 kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
 
-        kafkaSpoutConfig.getSubscription().subscribe(kafkaConsumer, consumerRebalanceListener, context);
+        kafkaSpoutConfig.getSubscription().subscribe(kafkaConsumer, new KafkaSpoutConsumerRebalanceListener(), context);
         return kafkaConsumer;
     }
 
@@ -96,7 +96,6 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
                 '}';
     }
 
-    //TODO Delete
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
@@ -110,6 +109,11 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
             LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
+
+            LOG.debug("Aborting transaction on Kafka consumer instance [{}] due to Kafka consumer rebalance ", kafkaConsumer);
+
+            throw new KafkaConsumerRebalanceTransactionAbortException(
+                    String.format("Aborting transaction on Kafka consumer instance [%s] due to Kafka consumer rebalance ", kafkaConsumer));
         }
     }
 }

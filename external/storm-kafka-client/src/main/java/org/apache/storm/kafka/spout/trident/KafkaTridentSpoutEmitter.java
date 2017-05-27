@@ -18,7 +18,6 @@
 
 package org.apache.storm.kafka.spout.trident;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -71,43 +70,18 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     private final Timer refreshSubscriptionTimer;
 
     private TopologyContext topologyContext;
-    private ConsumerRebalanceListener consumerRebalanceListener;
-    private Collection<TopicPartition> pausedTopicPartitions;
 
     public KafkaTridentSpoutEmitter(KafkaTridentSpoutManager<K, V> kafkaManager, TopologyContext topologyContext, Timer refreshSubscriptionTimer) {
-        this.consumerRebalanceListener = new KafkaSpoutConsumerRebalanceListener();
+        this.kafkaConsumer = kafkaManager.createAndSubscribeKafkaConsumer(topologyContext);
         this.kafkaManager = kafkaManager;
-        this.kafkaConsumer = this.kafkaManager.createAndSubscribeKafkaConsumer(topologyContext, consumerRebalanceListener);
         this.topologyContext = topologyContext;
         this.refreshSubscriptionTimer = refreshSubscriptionTimer;
+        this.translator = kafkaManager.getKafkaSpoutConfig().getTranslator();
 
         final KafkaSpoutConfig<K, V> kafkaSpoutConfig = kafkaManager.getKafkaSpoutConfig();
-        this.translator = kafkaSpoutConfig.getTranslator();
         this.pollTimeoutMs = kafkaSpoutConfig.getPollTimeoutMs();
         this.firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
         LOG.debug("Created {}", this);
-    }
-
-    private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaManager.getKafkaSpoutConfig().getConsumerGroupId(), kafkaConsumer, partitions);
-            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
-        }
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
-            if (pausedTopicPartitions != null) {
-                pausedTopicPartitions.retainAll(partitions);
-            }
-            LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaManager.getKafkaSpoutConfig().getConsumerGroupId(), kafkaConsumer, partitions);
-
-            throw new KafkaConsumerRebalanceException()
-        }
     }
 
     /**
@@ -128,7 +102,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         final TopicPartition currBatchTp = currBatchPartition.getTopicPartition();
         final Set<TopicPartition> assignments = kafkaConsumer.assignment();
         KafkaTridentSpoutBatchMetadata<K, V> currentBatch = lastBatch;
-        pausedTopicPartitions = Collections.emptySet();
+        Collection<TopicPartition> pausedTopicPartitions = Collections.emptySet();
 
         if (assignments == null || !assignments.contains(currBatchPartition.getTopicPartition())) {
             LOG.warn("SKIPPING processing batch [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], " +
@@ -219,7 +193,6 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
 
     // returns paused topic-partitions.
     private Collection<TopicPartition> pauseTopicPartitions(TopicPartition excludedTp) {
-        kafkaConsumer.resume(Collections.singletonList(excludedTp));
         final Set<TopicPartition> pausedTopicPartitions = new HashSet<>(kafkaConsumer.assignment());
         LOG.debug("Currently assigned topic-partitions {}", pausedTopicPartitions);
         pausedTopicPartitions.remove(excludedTp);

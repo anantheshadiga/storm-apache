@@ -25,24 +25,24 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
  * fail transactions. In face of Kafka consumer rebalance, the cleanest and predictable way to handle state change
  * is to fail transaction and re-send it.
  */
-public class KafkaConsumerRebalanceException extends RuntimeException {
-    public KafkaConsumerRebalanceException() {
+public class KafkaConsumerRebalanceTransactionAbortException extends RuntimeException {
+    public KafkaConsumerRebalanceTransactionAbortException() {
         super();
     }
 
-    public KafkaConsumerRebalanceException(String message) {
+    public KafkaConsumerRebalanceTransactionAbortException(String message) {
         super(message);
     }
 
-    public KafkaConsumerRebalanceException(String message, Throwable cause) {
+    public KafkaConsumerRebalanceTransactionAbortException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public KafkaConsumerRebalanceException(Throwable cause) {
+    public KafkaConsumerRebalanceTransactionAbortException(Throwable cause) {
         super(cause);
     }
 
-    protected KafkaConsumerRebalanceException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
+    protected KafkaConsumerRebalanceTransactionAbortException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
     }
 }
