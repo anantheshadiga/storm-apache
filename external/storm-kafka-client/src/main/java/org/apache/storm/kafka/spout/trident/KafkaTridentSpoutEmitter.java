@@ -71,15 +71,19 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     private final Timer refreshSubscriptionTimer;
 
     private TopologyContext topologyContext;
-    private boolean transactionPending;
+    private boolean transactionInProgress;
+    private Collection<TopicPartition> pausedTopicPartitions;
+    private KafkaSpoutConfig<K, V> kafkaSpoutConfig;
+    private boolean abortTransaction;
 
     public KafkaTridentSpoutEmitter(KafkaTridentSpoutManager<K, V> kafkaManager, TopologyContext topologyContext, Timer refreshSubscriptionTimer) {
         this.kafkaManager = kafkaManager;
+        this.kafkaSpoutConfig = kafkaManager.getKafkaSpoutConfig();
         this.kafkaConsumer = this.kafkaManager.createAndSubscribeKafkaConsumer(topologyContext, new KafkaSpoutConsumerRebalanceListener());
+
         this.topologyContext = topologyContext;
         this.refreshSubscriptionTimer = refreshSubscriptionTimer;
 
-        final KafkaSpoutConfig<K, V> kafkaSpoutConfig = kafkaManager.getKafkaSpoutConfig();
         this.translator = kafkaSpoutConfig.getTranslator();
         this.pollTimeoutMs = kafkaSpoutConfig.getPollTimeoutMs();
         this.firstPollOffsetStrategy = kafkaSpoutConfig.getFirstPollOffsetStrategy();
@@ -91,12 +95,13 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaManager.getKafkaSpoutConfig().getConsumerGroupId(), kafkaConsumer, partitions);
+                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
 
-            if (transactionPending) {
-                throw new KafkaConsumerRebalanceTransactionAbortException(
-                        String.format("Aborting transaction on Kafka consumer instance [%s] due to Kafka consumer rebalance ", kafkaConsumer));
+            if (transactionInProgress) {
+                abortTransaction = true;
+                resumeTopicPartitions(partitions);
+                pausedTopicPartitions = Collections.emptySet();
             }
         }
 
@@ -105,12 +110,16 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
 
             LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaManager.getKafkaSpoutConfig().getConsumerGroupId(), kafkaConsumer, partitions);
+                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
 
-            if (transactionPending) {
-                LOG.debug("Aborting transaction on Kafka consumer instance [{}] due to Kafka consumer rebalance ", kafkaConsumer);
-                throw new KafkaConsumerRebalanceTransactionAbortException(
-                        String.format("Aborting transaction on Kafka consumer instance [%s] due to Kafka consumer rebalance ", kafkaConsumer));
+            if (transactionInProgress) {
+//                kafkaConsumer.resume(partitions);     //TODO Delete
+                LOG.debug("Aborting transaction due to Kafka consumer rebalance. [consumer-group={}, consumer={}",
+                        kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer);
+//                abortTransaction = true;
+                /*throw new KafkaConsumerRebalanceTransactionAbortException(
+                        String.format("Aborted transaction due to Kafka consumer rebalance. [consumer-group=%s, consumer=%s",
+                                kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer));*/
             }
         }
     }
@@ -127,7 +136,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     public KafkaTridentSpoutBatchMetadata<K, V> emitPartitionBatch(TransactionAttempt tx, TridentCollector collector,
             KafkaTridentSpoutTopicPartition currBatchPartition, KafkaTridentSpoutBatchMetadata<K, V> lastBatch) {
 
-        transactionPending = true;
+        transactionInProgress = true;
 
         LOG.debug("Processing batch: [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], [collector = {}]",
                 tx, currBatchPartition, lastBatch, collector);
@@ -135,13 +144,26 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         final TopicPartition currBatchTp = currBatchPartition.getTopicPartition();
         final Set<TopicPartition> assignments = kafkaConsumer.assignment();
         KafkaTridentSpoutBatchMetadata<K, V> currentBatch = lastBatch;
-        Collection<TopicPartition> pausedTopicPartitions = Collections.emptySet();
+        pausedTopicPartitions = Collections.emptySet();
+
+//        1 2 3 4   - initial
+//        1 2 3 4   - same
+//        1 2 3 4 5 - same + 1 new
+//        1 2 3     - subset (- 1)
+//        1 7       - subset + 1 new
+//        1         - just one
+//        5 6 7     - all new
+
+//        null
+//        not null
+
+
 
         if (assignments == null || !assignments.contains(currBatchPartition.getTopicPartition())) {
             LOG.warn("SKIPPING processing batch [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], " +
                             "[collector = {}] because it is not part of the assignments {} of consumer instance [{}] " +
                             "of consumer group [{}]", tx, currBatchPartition, lastBatch, collector, assignments,
-                    kafkaConsumer, kafkaManager.getKafkaSpoutConfig().getConsumerGroupId());
+                    kafkaConsumer, kafkaSpoutConfig.getConsumerGroupId());
         } else {
             try {
                 // pause other topic-partitions to only poll from current topic-partition
@@ -151,27 +173,48 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
 
                 // poll
                 if (refreshSubscriptionTimer.isExpiredResetOnTrue()) {
-                    kafkaManager.getKafkaSpoutConfig().getSubscription().refreshAssignment();
+                    kafkaSpoutConfig.getSubscription().refreshAssignment();
                 }
 
                 final ConsumerRecords<K, V> records = kafkaConsumer.poll(pollTimeoutMs);
-                LOG.debug("Polled [{}] records from Kafka.", records.count());
 
-                if (!records.isEmpty()) {
-                    emitTuples(collector, records);
-                    // build new metadata
-                    currentBatch = new KafkaTridentSpoutBatchMetadata<>(currBatchTp, records, lastBatch);
+                if (abortTransaction) {
+                    abortTransaction();
+                } else {
+                    LOG.debug("Polled [{}] records from Kafka.", records.count());
+                    if (!records.isEmpty()) {
+                        emitTuples(collector, records);
+                        // build new metadata
+                        currentBatch = new KafkaTridentSpoutBatchMetadata<>(currBatchTp, records, lastBatch);
+                    }
                 }
+
             } finally {
-                kafkaConsumer.resume(pausedTopicPartitions);
-                transactionPending = false;
-                LOG.trace("Resumed topic-partitions {}", pausedTopicPartitions);
+                resumeTopicPartitions(pausedTopicPartitions);
+                pausedTopicPartitions = Collections.emptySet();
+                transactionInProgress = false;
+                abortTransaction = false;
             }
             LOG.debug("Emitted batch: [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], " +
                     "[currBatchMetadata = {}], [collector = {}]", tx, currBatchPartition, lastBatch, currentBatch, collector);
         }
 
         return currentBatch;
+    }
+
+    private void abortTransaction() {
+        LOG.debug("Aborting transaction due to Kafka consumer rebalance. [consumer-group={}, consumer={}",
+                kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer);
+        throw new KafkaConsumerRebalanceTransactionAbortException(
+                String.format("Aborted transaction due to Kafka consumer rebalance. [consumer-group=%s, consumer=%s",
+                        kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer));
+    }
+
+    private void resumeTopicPartitions(Collection<TopicPartition> tpsToResume) {
+        if (tpsToResume!= null && !tpsToResume.isEmpty()) {
+            kafkaConsumer.resume(tpsToResume);
+            LOG.trace("Resumed topic-partitions {}", tpsToResume);
+        }
     }
 
     private void emitTuples(TridentCollector collector, ConsumerRecords<K, V> records) {
@@ -239,7 +282,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     @Override
     public void refreshPartitions(List<KafkaTridentSpoutTopicPartition> partitionResponsibilities) {
         LOG.trace("Refreshing of topic-partitions handled by Kafka. " +
-                "No action taken by this method for topic partitions {}", partitionResponsibilities);
+                "No action taken by this method for topic-partitions {}", partitionResponsibilities);
     }
 
     /**

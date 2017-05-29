@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.Collection;
 import java.util.Set;
 
 public class KafkaTridentSpoutManager<K, V> implements Serializable {
@@ -94,27 +93,5 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
                 "{kafkaConsumer=" + kafkaConsumer +
                 ", kafkaSpoutConfig=" + kafkaSpoutConfig +
                 '}';
-    }
-
-    //TODO Delete
-    private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
-            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
-        }
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
-            LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
-
-            LOG.debug("Aborting transaction on Kafka consumer instance [{}] due to Kafka consumer rebalance ", kafkaConsumer);
-
-            throw new KafkaConsumerRebalanceTransactionAbortException(
-                    String.format("Aborting transaction on Kafka consumer instance [%s] due to Kafka consumer rebalance ", kafkaConsumer));
-        }
     }
 }
