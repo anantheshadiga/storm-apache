@@ -50,8 +50,10 @@ public class OpaquePartitionedTridentSpoutExecutor implements ICommitterTridentS
         
         @Override
         public Object initializeTransaction(long txid, Object prevMetadata, Object currMetadata) {
-            LOG.debug("Initialize Transaction. [txid = {}], [prevMetadata = {}], [currMetadata = {}]", txid, prevMetadata, currMetadata);
-            return _coordinator.getPartitionsForBatch();
+            final Object partitionsForBatch = _coordinator.getPartitionsForBatch();
+            LOG.debug("Initialize Transaction. [txid = {}], [prevMetadata = {}], [currMetadata = {}], [currMetadata = {}]",
+                      txid, prevMetadata, partitionsForBatch);
+            return partitionsForBatch;
         }
 
 

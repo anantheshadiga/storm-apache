@@ -96,10 +96,13 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
             LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
+
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
 
             if (transactionInProgress) {
                 abortTransaction = true;
+                LOG.debug("onPartitionsRevoked - Paused Internal {}", pausedTopicPartitions);
+                LOG.debug("onPartitionsRevoked - Revoke Param {}", partitions);
                 resumeTopicPartitions(partitions);
                 pausedTopicPartitions = Collections.emptySet();
             }
@@ -146,19 +149,6 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         KafkaTridentSpoutBatchMetadata<K, V> currentBatch = lastBatch;
         pausedTopicPartitions = Collections.emptySet();
 
-//        1 2 3 4   - initial
-//        1 2 3 4   - same
-//        1 2 3 4 5 - same + 1 new
-//        1 2 3     - subset (- 1)
-//        1 7       - subset + 1 new
-//        1         - just one
-//        5 6 7     - all new
-
-//        null
-//        not null
-
-
-
         if (assignments == null || !assignments.contains(currBatchPartition.getTopicPartition())) {
             LOG.warn("SKIPPING processing batch [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], " +
                             "[collector = {}] because it is not part of the assignments {} of consumer instance [{}] " +
@@ -167,7 +157,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         } else {
             try {
                 // pause other topic-partitions to only poll from current topic-partition
-                pausedTopicPartitions = pauseTopicPartitions(currBatchTp);
+                this.pausedTopicPartitions = pauseTopicPartitions(currBatchTp);
 
                 seek(currBatchTp, lastBatch);
 
@@ -194,6 +184,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
                 pausedTopicPartitions = Collections.emptySet();
                 transactionInProgress = false;
                 abortTransaction = false;
+                LOG.debug("paused = {}, abortTransaction = {}, transactionInProgress = {}", pausedTopicPartitions, transactionInProgress, abortTransaction);    // TODO
             }
             LOG.debug("Emitted batch: [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], " +
                     "[currBatchMetadata = {}], [collector = {}]", tx, currBatchPartition, lastBatch, currentBatch, collector);
@@ -211,7 +202,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     }
 
     private void resumeTopicPartitions(Collection<TopicPartition> tpsToResume) {
-        if (tpsToResume!= null && !tpsToResume.isEmpty()) {
+        if (tpsToResume != null && !tpsToResume.isEmpty()) {
             kafkaConsumer.resume(tpsToResume);
             LOG.trace("Resumed topic-partitions {}", tpsToResume);
         }
@@ -270,13 +261,12 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
 
     // returns paused topic-partitions.
     private Collection<TopicPartition> pauseTopicPartitions(TopicPartition excludedTp) {
-        kafkaConsumer.resume(Collections.singletonList(excludedTp));
-        final Set<TopicPartition> pausedTopicPartitions = new HashSet<>(kafkaConsumer.assignment());
-        LOG.debug("Currently assigned topic-partitions {}", pausedTopicPartitions);
-        pausedTopicPartitions.remove(excludedTp);
-        kafkaConsumer.pause(pausedTopicPartitions);
-        LOG.debug("Paused topic-partitions {}", pausedTopicPartitions);
-        return pausedTopicPartitions;
+        final Set<TopicPartition> topicPartitionsToPause = new HashSet<>(kafkaConsumer.assignment());
+        LOG.debug("Currently assigned topic-partitions {}", topicPartitionsToPause);
+        topicPartitionsToPause.remove(excludedTp);
+        kafkaConsumer.pause(topicPartitionsToPause);
+        LOG.debug("Paused topic-partitions {}", topicPartitionsToPause);
+        return topicPartitionsToPause;
     }
 
     @Override
