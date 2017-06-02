@@ -100,8 +100,6 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     }
 
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
-        protected final Logger LOG = LoggerFactory.getLogger(KafkaSpoutConsumerRebalanceListener.class);
-
         TopicPartition currBatchTp;     // Topic Partition being processed in current batch
 
         @Override
@@ -111,7 +109,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
 
             if (transactionInProgress) {
-                resumeTopicPartitions(partitions);
+                resumeTopicPartitions();
             }
         }
 
@@ -119,15 +117,19 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
             log("Partitions reassignment", partitions);
 
-            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
+//          1 2 3
+//          1 2 4    - 3 - abort
+//          1 2 4    - 2 - cont
+//          4 5      - 2, 3 - abort
 
+            KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
 
             if (transactionInProgress) {
                 if (!partitions.contains(currBatchTp)) {
+                    abortTransaction = true;
                     LOG.warn("Partitions reassignment. Current batch's topic-partition [{}] " +
                             "no longer assigned to consumer={} of consumer-group={}. Aborting transaction.",
                             currBatchTp, kafkaConsumer);
-                    abortTransaction = true;
                 } else {
                     pauseTopicPartitions(partitions, currBatchTp);   // pause topic-partitions other than current batch's tp
                 }
@@ -187,11 +189,10 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
                 }
             }
         } finally {
-            resumeTopicPartitions(pausedTopicPartitions);
+            resumeTopicPartitions();
             transactionInProgress = false;
             abortTransaction = false;
             kafkaConsListener.currBatchTp = null;
-            LOG.debug("paused = {}, abortTransaction = {}, transactionInProgress = {}", pausedTopicPartitions, transactionInProgress, abortTransaction);    // TODO
         }
         LOG.debug("Emitted batch: [transaction = {}], [currBatchPartition = {}], [lastBatchMetadata = {}], " +
                 "[currBatchMetadata = {}], [collector = {}]", tx, currBatchPartition, lastBatch, currentBatch, collector);
@@ -206,12 +207,11 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
                         kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer));*/
     }
 
-    private void resumeTopicPartitions(Collection<TopicPartition> tpsToResume) {
-        if (tpsToResume != null && !tpsToResume.isEmpty()) {
-            kafkaConsumer.resume(tpsToResume);
-            pausedTopicPartitions = Collections.emptySet();
-            LOG.trace("Resumed topic-partitions {}", tpsToResume);
-        }
+    private void resumeTopicPartitions() {
+        final Collection<TopicPartition> resumedTps = pausedTopicPartitions;
+        kafkaConsumer.resume(pausedTopicPartitions);
+        pausedTopicPartitions = Collections.emptySet();
+        LOG.trace("Resumed topic-partitions {}", resumedTps);
     }
 
     private void pauseTopicPartitions(Collection<TopicPartition> assigned, TopicPartition tpNotToPause) {
@@ -330,10 +330,21 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         LOG.debug("Closed");
     }
 
+    /*@Override
+    public String toString() {
+        return super.toString() +
+                "{kafkaManager=" + kafkaManager +
+                '}';
+    }*/
+
     @Override
     public String toString() {
         return super.toString() +
                 "{kafkaManager=" + kafkaManager +
+                ", transactionInProgress=" + transactionInProgress +
+                ", pausedTopicPartitions=" + pausedTopicPartitions +
+                ", abortTransaction=" + abortTransaction +
+                ", currBatchTp=" + kafkaConsListener.currBatchTp +
                 '}';
     }
 }
