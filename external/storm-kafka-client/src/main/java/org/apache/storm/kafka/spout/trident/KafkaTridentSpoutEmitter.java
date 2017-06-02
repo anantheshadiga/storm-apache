@@ -100,45 +100,45 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
     }
 
     private class KafkaSpoutConsumerRebalanceListener implements ConsumerRebalanceListener {
+        protected final Logger LOG = LoggerFactory.getLogger(KafkaSpoutConsumerRebalanceListener.class);
+
         TopicPartition currBatchTp;     // Topic Partition being processed in current batch
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            LOG.info("Partitions revoked. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
+            log("Partitions revoked", partitions);
 
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.removeAll(partitions);
 
             if (transactionInProgress) {
-                LOG.debug("Partitions revoked. Transaction in progress. [currBatchTp={}]", currBatchTp);
-                LOG.debug("Partitions revoked. Paused Internal {}", pausedTopicPartitions);
-                LOG.debug("Partitions revoked. Revoke Param {}", partitions);
-                LOG.debug("They should be SAME");
                 resumeTopicPartitions(partitions);
-            } else {
-                LOG.debug("Partitions revoked. No transaction in progress");
             }
         }
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            log("Partitions reassignment", partitions);
+
             KafkaTridentSpoutTopicPartitionRegistry.INSTANCE.addAll(partitions);
 
-            LOG.info("Partitions reassignment. [consumer-group={}, consumer={}, topic-partitions={}]",
-                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer, partitions);
 
             if (transactionInProgress) {
-                LOG.debug("Partitions reassignment. Transaction in progress. [currBatchTp={}]", currBatchTp);
                 if (!partitions.contains(currBatchTp)) {
-                    LOG.warn("Partitions reassignment. Current batch topic-partition [{}] " +
-                            "no longer assigned to consumer={} after rebalance. Aborting transaction.", currBatchTp, kafkaConsumer);
+                    LOG.warn("Partitions reassignment. Current batch's topic-partition [{}] " +
+                            "no longer assigned to consumer={} of consumer-group={}. Aborting transaction.",
+                            currBatchTp, kafkaConsumer);
                     abortTransaction = true;
                 } else {
                     pauseTopicPartitions(partitions, currBatchTp);   // pause topic-partitions other than current batch's tp
                 }
-            } else {
-                LOG.debug("Partitions assigned. No transaction in progress");
             }
+        }
+
+        private void log(String msg, Collection<TopicPartition> partitions) {  // tip - transactionInProgresses
+            LOG.info("{}. [transaction-in-progress={}, currBatchTp={}, paused-topic-partitions={}, " +
+                            "topic-partitions={}, consumer-group={}, consumer={},]",
+                    msg, transactionInProgress, currBatchTp, pausedTopicPartitions, partitions,
+                    kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer);
         }
     }
 
