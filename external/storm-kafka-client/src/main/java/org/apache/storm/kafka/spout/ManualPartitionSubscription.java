@@ -15,37 +15,31 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+
 package org.apache.storm.kafka.spout;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.storm.task.TopologyContext;
+
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.task.TopologyContext;
-
-public class ManualPartitionNamedSubscription extends NamedSubscription {
+public class ManualPartitionSubscription extends Subscription {
     private static final long serialVersionUID = 5633018073527583826L;
     private final ManualPartitioner partitioner;
+    private final TopicFilter partitionFilter;
     private Set<TopicPartition> currentAssignment = null;
     private KafkaConsumer<?, ?> consumer = null;
     private ConsumerRebalanceListener listener = null;
     private TopologyContext context = null;
 
-    public ManualPartitionNamedSubscription(ManualPartitioner parter, Collection<String> topics) {
-        super(topics);
+    public ManualPartitionSubscription(ManualPartitioner parter, TopicFilter partitionFilter) {
+        this.partitionFilter = partitionFilter;
         this.partitioner = parter;
-    }
-    
-    public ManualPartitionNamedSubscription(ManualPartitioner parter, String ... topics) {
-        this(parter, Arrays.asList(topics));
     }
     
     @Override
@@ -58,21 +52,21 @@ public class ManualPartitionNamedSubscription extends NamedSubscription {
     
     @Override
     public void refreshAssignment() {
-        List<TopicPartition> allPartitions = new ArrayList<>();
-        for (String topic : topics) {
-            for (PartitionInfo partitionInfo: consumer.partitionsFor(topic)) {
-                allPartitions.add(new TopicPartition(partitionInfo.topic(), partitionInfo.partition()));
-            }
-        }
+        List<TopicPartition> allPartitions = partitionFilter.getFilteredTopicPartitions(consumer);
         Collections.sort(allPartitions, TopicPartitionComparator.INSTANCE);
         Set<TopicPartition> newAssignment = new HashSet<>(partitioner.partition(allPartitions, context));
         if (!newAssignment.equals(currentAssignment)) {
+            consumer.assign(newAssignment);
             if (currentAssignment != null) {
                 listener.onPartitionsRevoked(currentAssignment);
-                listener.onPartitionsAssigned(newAssignment);
             }
+            listener.onPartitionsAssigned(newAssignment);
             currentAssignment = newAssignment;
-            consumer.assign(currentAssignment);
         }
+    }
+    
+    @Override
+    public String getTopicsString() {
+        return partitionFilter.getTopicsString();
     }
 }
