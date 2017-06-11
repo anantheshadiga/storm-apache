@@ -138,7 +138,7 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
 
         private void log(String msg, Collection<TopicPartition> partitions) {  // tip - transactionInProgresses
             LOG.info("{}. [transaction-in-progress={}, currBatchTp={}, paused-topic-partitions={}, " +
-                            "topic-partitions={}, consumer-group={}, consumer={},]",
+                            "topic-partitions={}, consumer-group={}, consumer={}]",
                     msg, transactionInProgress, currBatchTp, pausedTopicPartitions, partitions,
                     kafkaSpoutConfig.getConsumerGroupId(), kafkaConsumer);
         }
@@ -329,13 +329,6 @@ public class KafkaTridentSpoutEmitter<K, V> implements IOpaquePartitionedTrident
         kafkaConsumer.close();
         LOG.debug("Closed");
     }
-
-    /*@Override
-    public String toString() {
-        return super.toString() +
-                "{kafkaManager=" + kafkaManager +
-                '}';
-    }*/
 
     @Override
     public String toString() {

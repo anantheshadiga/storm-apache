@@ -34,9 +34,6 @@ import java.util.Set;
 public class KafkaTridentSpoutManager<K, V> implements Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(KafkaTridentSpoutManager.class);
 
-    // Kafka
-    private transient KafkaConsumer<K, V> kafkaConsumer;
-
     // Bookkeeping
     private final KafkaSpoutConfig<K, V> kafkaSpoutConfig;
     // Declare some KafkaSpoutConfig references for convenience
@@ -49,15 +46,27 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
     }
 
     KafkaConsumer<K,V> createAndSubscribeKafkaConsumer(TopologyContext context, ConsumerRebalanceListener consumerRebalanceListener) {
-        kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
+        final KafkaConsumer<K, V> kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
                 kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
+
+        sleep();
 
         kafkaSpoutConfig.getSubscription().subscribe(kafkaConsumer, consumerRebalanceListener, context);
         return kafkaConsumer;
     }
 
-    KafkaConsumer<K, V> getKafkaConsumer() {
-        return kafkaConsumer;
+    private void sleep() {
+        String threadPrefix= "Thread-23";
+        if (Thread.currentThread().getName().startsWith(threadPrefix)) {
+            int time = 500;
+            LOG.info("THREAD SLEEPING {} ms", time);
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            LOG.info("THREAD RESUMING");
+        }
     }
 
     Set<TopicPartition> getTopicPartitions() {
@@ -79,7 +88,7 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
             }
             fields = fs;
         }
-        LOG.debug("OutputFields = {}", fields);
+//        LOG.debug("OutputFields = {}", fields);
         return fields;
     }
 
@@ -89,9 +98,6 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
 
     @Override
     public String toString() {
-        return super.toString() +
-                "{kafkaConsumer=" + kafkaConsumer +
-                ", kafkaSpoutConfig=" + kafkaSpoutConfig +
-                '}';
+        return super.toString() + "{kafkaSpoutConfig=" + kafkaSpoutConfig + '}';
     }
 }

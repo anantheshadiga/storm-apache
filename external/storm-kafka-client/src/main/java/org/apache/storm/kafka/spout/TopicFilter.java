@@ -19,9 +19,10 @@ package org.apache.storm.kafka.spout;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 
+import java.io.Serializable;
 import java.util.List;
 
-public interface TopicFilter {
+public interface TopicFilter extends Serializable {
     
     /**
      * Get the Kafka TopicPartitions passed by this filter. 

@@ -72,6 +72,10 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
         UNCOMMITTED_EARLIEST,
         UNCOMMITTED_LATEST }
 
+    public static Builder<String, String> builder(String bootstrapServers, Subscription subscription) {
+        return new Builder<>(bootstrapServers, StringDeserializer.class, StringDeserializer.class, subscription);
+    }
+
     public static Builder<String, String> builder(String bootstrapServers, String ... topics) {
         return new Builder<>(bootstrapServers, StringDeserializer.class, StringDeserializer.class, topics);
     }
