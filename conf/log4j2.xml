@@ -23,55 +23,8 @@
     </Console>
   </Appenders>
   <Loggers>
-    <!--OFF-->
-    <!--<Logger name="org.apache.zookeeper" level="OFF"/>-->
-    <!--<Logger name="org.apache.storm.logging.ThriftAccessLogger" level="OFF"/>-->
-    <!--<Logger name="org.apache.curator.utils.DefaultTracerDriver" level="OFF"/>-->
-    <!--<Logger name="org.apache.storm.blobstore.FileBlobStoreImpl" level="OFF"/>-->
-    <!--<Logger name="org.apache.storm.blobstore.LocalFsBlobStore" level="OFF"/>-->
-    <!--<Logger name="org.apache.storm.blobstore.BlobStoreUtils" level="OFF"/>-->
-    <!--<Logger name="org.apache.storm.starter.trident.DebugMemoryMapState" level="OFF"/>-->
-    <!--<Logger name="org.apache.kafka.common.metrics.Metrics" level="OFF"/>-->
-    <!--<Logger name="o.a.s.s.r.ResourceUtils" level="OFF"/>-->
-
-    <!-- ALL -->
-
-    <Logger name="org.apache.storm.trident.topology.MasterBatchCoordinator" level="ALL"/>
-    <!--<Logger name="org.apache.storm.trident.operation.builtin.Debug" level="ALL"/>-->
-    <Logger name="org.apache.storm.trident.spout.TridentSpoutExecutor" level="ALL"/>
-    <Logger name="org.apache.storm.trident.topology.TridentBoltExecutor" level="ALL"/>
-    <!--<Logger name="org.apache.storm.trident.spout.OpaquePartitionedTridentSpoutExecutor" level="ALL"/>-->
-    <Logger name="org.apache.storm.trident.spout.OpaquePartitionedTridentSpoutExecutor$Coordinator" level="ALL"/>
-    <Logger name="org.apache.storm.trident.spout.OpaquePartitionedTridentSpoutExecutor$Emitter" level="ALL"/>
-    <!--<Logger name="org.apache.storm.trident.spout.PartitionedTridentSpoutExecutor.Coordinator" level="ALL"/>-->
-    <!--<Logger name="org.apache.storm.trident.spout.PartitionedTridentSpoutExecutor.Emitter" level="ALL"/>-->
-    <!--<Logger name="org.apache.storm.starter.spout.RandomSentenceSpout" level="ALL"/>-->
-    <!--<Logger name="org.apache.storm.kafka.trident.TridentKafkaEmitter" level="ALL"/>-->
-    <!--<Logger name="org.apache.storm.kafka.KafkaUtils" level="ALL"/>-->
-
-    <!--New Trident Spout -->
-    <!--<Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutBatchMetadata" level="ALL"/>-->
-      <Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutEmitter" level="ALL"/>
-      <Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutManager" level="ALL"/>
-      <Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutOpaque" level="ALL"/>
-      <!--<Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutOpaqueCoordinator" level="ALL"/>-->
-      <!--<Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutTopicPartition" level="ALL"/>-->
-      <!--<Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutTopicPartitionRegistry" level="ALL"/>-->
-      <!--<Logger name="org.apache.storm.kafka.spout.trident.KafkaTridentSpoutTransactional" level="ALL"/>-->
-
-    <!--New Kafka Spout -->
-    <!--<Logger name="org.apache.storm.kafka.spout.KafkaSpout" level="ALL"/>-->
-
-    <!-- internals -->
-    <!--<Logger name="org.apache.storm.daemon.executor" level="ALL"/>-->
-    <Logger name="org.apache.storm.trident.topology.state.RotatingTransactionalState" level="ALL"/>
-    <Logger name="org.apache.storm.trident.topology.state.TransactionalState" level="ALL"/>
-
-    <!--<Logger name="org.apache.kafka" level="ALL"/>-->
-
-    <!--<Root level="INFO">-->
-    <Root level="ALL">
-    <!--<Root level="OFF">-->
+    <Logger name="org.apache.zookeeper" level="WARN"/>
+    <Root level="info">
       <AppenderRef ref="Console"/>
     </Root>
   </Loggers>

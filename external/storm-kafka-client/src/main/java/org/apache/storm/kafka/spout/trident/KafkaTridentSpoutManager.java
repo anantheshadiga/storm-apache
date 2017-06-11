@@ -49,24 +49,8 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
         final KafkaConsumer<K, V> kafkaConsumer = new KafkaConsumer<>(kafkaSpoutConfig.getKafkaProps(),
                 kafkaSpoutConfig.getKeyDeserializer(), kafkaSpoutConfig.getValueDeserializer());
 
-        sleep();
-
         kafkaSpoutConfig.getSubscription().subscribe(kafkaConsumer, consumerRebalanceListener, context);
         return kafkaConsumer;
-    }
-
-    private void sleep() {
-        String threadPrefix= "Thread-23";
-        if (Thread.currentThread().getName().startsWith(threadPrefix)) {
-            int time = 500;
-            LOG.info("THREAD SLEEPING {} ms", time);
-            try {
-                Thread.sleep(500);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            LOG.info("THREAD RESUMING");
-        }
     }
 
     Set<TopicPartition> getTopicPartitions() {
@@ -88,7 +72,6 @@ public class KafkaTridentSpoutManager<K, V> implements Serializable {
             }
             fields = fs;
         }
-//        LOG.debug("OutputFields = {}", fields);
         return fields;
     }
 
