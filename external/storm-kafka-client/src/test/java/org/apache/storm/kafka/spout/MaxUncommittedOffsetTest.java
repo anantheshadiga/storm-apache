@@ -34,9 +34,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.KafkaUnitRule;
+import org.apache.storm.kafka.OffsetAndMetadataStub;
 import org.apache.storm.kafka.spout.builders.SingleTopicKafkaSpoutConfiguration;
+import org.apache.storm.kafka.spout.internal.KafkaConsumerFactoryDefault;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.utils.Time;
@@ -71,6 +76,9 @@ public class MaxUncommittedOffsetTest {
             1, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(initialRetryDelaySecs))) //Retry once after a minute
         .build();
     private KafkaSpout<String, String> spout;
+    private KafkaConsumer<String, String> consumer;
+
+
 
     @Before
     public void setUp() {
@@ -81,7 +89,8 @@ public class MaxUncommittedOffsetTest {
         //The spout must be able to reemit all retriable tuples, even if the maxPollRecords is set to a low value compared to maxUncommittedOffsets.
         assertThat("Current tests require maxPollRecords < maxUncommittedOffsets", maxPollRecords, lessThanOrEqualTo(maxUncommittedOffsets));
         MockitoAnnotations.initMocks(this);
-        this.spout = new KafkaSpout<>(spoutConfig);
+        spout = new KafkaSpout<>(spoutConfig);
+        consumer = new KafkaConsumerFactoryDefault<String, String>().createConsumer(spoutConfig);
     }
 
     private void prepareSpout(int msgCount) throws Exception {
@@ -119,6 +128,7 @@ public class MaxUncommittedOffsetTest {
                 spout.ack(messageId);
             }
             Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
+
             spout.nextTuple();
 
             //Now check that the spout will emit another maxUncommittedOffsets messages
