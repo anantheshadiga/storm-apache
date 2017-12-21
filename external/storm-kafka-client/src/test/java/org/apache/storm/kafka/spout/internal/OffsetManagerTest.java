@@ -16,7 +16,6 @@
 
 package org.apache.storm.kafka.spout.internal;
 
-import static org.apache.storm.kafka.OffsetAndMetadataStub.COMMIT_METADATA;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.junit.Assert.assertFalse;
@@ -33,6 +32,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 public class OffsetManagerTest {
+    private static final String COMMIT_METADATA = "{\"topologyId\":\"tp1\",\"taskId\":3,\"threadName\":\"Thread-20\"}";
 
     @Rule
     public ExpectedException expect = ExpectedException.none();

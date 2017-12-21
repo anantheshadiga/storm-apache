@@ -120,9 +120,9 @@ public class KafkaSpoutConfig<K, V> implements Serializable {
      * <br/>
      * <ul>
      * <li>EARLIEST - the kafka spout polls records starting in the first offset of the partition, regardless
-     * of previous commits. When the topology is activated/deactivated this setting has no effect</li>
+     * of previous commits. This setting only takes effect on topology deployment.</li>
      * <li>LATEST - the kafka spout polls records with offsets greater than the last offset in the partition,
-     * regardless of previous commits. If the topology is activated/deactivated this setting has no effect</li>
+     * regardless of previous commits. This setting only takes effect on topology deployment.</li>
      * <li>UNCOMMITTED_EARLIEST - the kafka spout polls records from the last committed offset, if any. If no offset has been
      * committed it behaves as EARLIEST.</li>
      * <li>UNCOMMITTED_LATEST - the kafka spout polls records from the last committed offset, if any. If no offset has been

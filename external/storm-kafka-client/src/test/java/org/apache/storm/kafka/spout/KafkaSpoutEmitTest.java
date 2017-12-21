@@ -34,7 +34,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.kafka.OffsetAndMetadataStub;
 import org.apache.storm.kafka.spout.builders.SingleTopicKafkaSpoutConfiguration;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
@@ -102,8 +101,6 @@ public class KafkaSpoutEmitTest {
 
             when(consumerMock.poll(anyLong()))
                 .thenReturn(new ConsumerRecords<>(records));
-
-            OffsetAndMetadataStub.committed(consumerMock);
 
             for (int i = 0; i < numRecords; i++) {
                 spout.nextTuple();

@@ -36,12 +36,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.KafkaUnitRule;
-import org.apache.storm.kafka.OffsetAndMetadataStub;
 import org.apache.storm.kafka.spout.builders.SingleTopicKafkaSpoutConfiguration;
-import org.apache.storm.kafka.spout.internal.KafkaConsumerFactoryDefault;
 import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.utils.Time;
@@ -76,7 +72,6 @@ public class MaxUncommittedOffsetTest {
             1, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(initialRetryDelaySecs))) //Retry once after a minute
         .build();
     private KafkaSpout<String, String> spout;
-    private KafkaConsumer<String, String> consumer;
 
 
 
@@ -90,7 +85,6 @@ public class MaxUncommittedOffsetTest {
         assertThat("Current tests require maxPollRecords < maxUncommittedOffsets", maxPollRecords, lessThanOrEqualTo(maxUncommittedOffsets));
         MockitoAnnotations.initMocks(this);
         spout = new KafkaSpout<>(spoutConfig);
-        consumer = new KafkaConsumerFactoryDefault<String, String>().createConsumer(spoutConfig);
     }
 
     private void prepareSpout(int msgCount) throws Exception {
@@ -296,5 +290,4 @@ public class MaxUncommittedOffsetTest {
             assertThat("Expected the emitted messages to be retries of the failed tuples from the first batch, plus the first failed tuple from the second batch", thirdRunOffsets, everyItem(either(isIn(firstRunOffsets)).or(is(secondRunMessageIds.getAllValues().get(0).offset()))));
         }
     }
-
 }
