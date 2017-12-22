@@ -58,58 +58,23 @@ import org.mockito.MockitoAnnotations;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyList;
-
-import java.util.regex.Pattern;
-
 import static org.mockito.Matchers.anyString;
 
+import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.hamcrest.Matchers;
 
-public class SingleTopicKafkaSpoutTest {
-
-    @Rule
-    public KafkaUnitRule kafkaUnitRule = new KafkaUnitRule();
-
-    @Captor
-    private ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
-
-    private final TopologyContext topologyContext = mock(TopologyContext.class);
-    private final Map<String, Object> conf = new HashMap<>();
-    private final SpoutOutputCollector collector = mock(SpoutOutputCollector.class);
-    private final long commitOffsetPeriodMs = 2_000;
-    private final int maxRetries = 3;
-    private KafkaConsumer<String, String> consumerSpy;
-    private KafkaConsumerFactory<String, String> consumerFactory;
-    private KafkaSpout<String, String> spout;
-    private final int maxPollRecords = 10;
-
-    @Before
-    public void setUp() {
-        MockitoAnnotations.initMocks(this);
-        KafkaSpoutConfig<String, String> spoutConfig =
-            SingleTopicKafkaSpoutConfiguration.setCommonSpoutConfig(
-                KafkaSpoutConfig.builder("127.0.0.1:" + kafkaUnitRule.getKafkaUnit().getKafkaPort(),
-                    Pattern.compile(SingleTopicKafkaSpoutConfiguration.TOPIC)))
-                .setOffsetCommitPeriodMs(commitOffsetPeriodMs)
-                .setRetry(new KafkaSpoutRetryExponentialBackoff(KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0), KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0),
-                    maxRetries, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0)))
-                .setProp(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords)
-                .build();
-        this.consumerSpy = spy(new KafkaConsumerFactoryDefault<String, String>().createConsumer(spoutConfig));
-        this.consumerFactory = new KafkaConsumerFactory<String, String>() {
-            @Override
-            public KafkaConsumer<String, String> createConsumer(KafkaSpoutConfig<String, String> kafkaSpoutConfig) {
-                return consumerSpy;
-            }
-        
-        };
-        this.spout = new KafkaSpout<>(spoutConfig, consumerFactory);
-    }
-
-    private void prepareSpout(int messageCount) throws Exception {
-        SingleTopicKafkaUnitSetupHelper.populateTopicData(kafkaUnitRule.getKafkaUnit(), SingleTopicKafkaSpoutConfiguration.TOPIC, messageCount);
-        SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
+public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
+    @Override
+    KafkaSpoutConfig<String, String> createSpoutConfig() {
+        return SingleTopicKafkaSpoutConfiguration.setCommonSpoutConfig(
+            KafkaSpoutConfig.builder("127.0.0.1:" + kafkaUnitRule.getKafkaUnit().getKafkaPort(),
+                Pattern.compile(SingleTopicKafkaSpoutConfiguration.TOPIC)))
+            .setOffsetCommitPeriodMs(commitOffsetPeriodMs)
+            .setRetry(new KafkaSpoutRetryExponentialBackoff(KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0), KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0),
+                maxRetries, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0)))
+            .setProp(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords)
+            .build();
     }
 
     @Test
@@ -202,7 +167,7 @@ public class SingleTopicKafkaSpoutTest {
             //Commit offsets
             spout.nextTuple();
 
-            SingleTopicKafkaUnitSetupHelper.verifyAllMessagesCommitted(consumerSpy, commitCapture, messageCount);
+            verifyAllMessagesCommitted(messageCount);
         }
     }
 
@@ -230,7 +195,7 @@ public class SingleTopicKafkaSpoutTest {
             //Commit offsets
             spout.nextTuple();
 
-            SingleTopicKafkaUnitSetupHelper.verifyAllMessagesCommitted(consumerSpy, commitCapture, messageCount);
+            verifyAllMessagesCommitted(messageCount);
         }
     }
 
@@ -273,7 +238,7 @@ public class SingleTopicKafkaSpoutTest {
             //Commit offsets
             spout.nextTuple();
 
-            SingleTopicKafkaUnitSetupHelper.verifyAllMessagesCommitted(consumerSpy, commitCapture, messageCount);
+            verifyAllMessagesCommitted(messageCount);
         }
     }
 
@@ -319,7 +284,7 @@ public class SingleTopicKafkaSpoutTest {
             //Commit offsets
             spout.nextTuple();
 
-            SingleTopicKafkaUnitSetupHelper.verifyAllMessagesCommitted(consumerSpy, commitCapture, messageCount);
+            verifyAllMessagesCommitted(messageCount);
         }
     }
 
