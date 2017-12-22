@@ -18,6 +18,7 @@
 
 package org.apache.storm.kafka.spout;
 
+import clojure.lang.Obj;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.storm.kafka.spout.builders.SingleTopicKafkaSpoutConfiguration;
 import org.apache.storm.utils.Time;
@@ -25,6 +26,7 @@ import org.junit.Test;
 
 import java.util.regex.Pattern;
 
+import static org.apache.storm.kafka.spout.KafkaSpoutAbstractTest.Action.ACK;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
@@ -48,7 +50,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             final int messageCount = 2;
             prepareSpout(messageCount);
 
-            nextTuple_verifyEmitted_action_resetCollectorMock(0, true, true, Object.class);
+            nextTuple_verifyEmitted_action_resetCollectorMock(0, ACK, Object.class, true);
 
             doNothing().when(consumerSpy).close();
 
@@ -59,7 +61,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
             spout.activate();
 
-            nextTuple_verifyEmitted_action_resetCollectorMock(1, true, true);
+            nextTuple_verifyEmitted_action_resetCollectorMock(1, ACK, Object.class, true);
 
             commitAndVerifyAllMessagesCommitted(messageCount, 2);
         }
@@ -73,7 +75,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             final int messageCount = 2;
             prepareSpout(messageCount);
 
-            nextTuple_verifyEmitted_action_resetCollectorMock(0, true, true);
+            nextTuple_verifyEmitted_action_resetCollectorMock(0, ACK, Object.class, true);
 
             //Commits offsets during deactivation
             spout.deactivate();
@@ -85,7 +87,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             // Initialize spout using the same populated data (i.e same kafkaUnitRule)
             SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
 
-            nextTuple_verifyEmitted_action_resetCollectorMock(1, true, true);
+            nextTuple_verifyEmitted_action_resetCollectorMock(1, ACK, Object.class, true);
 
             commitAndVerifyAllMessagesCommitted(messageCount, 1);
         }
@@ -99,7 +101,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             final int messageCount = 2;
             prepareSpout(messageCount);
 
-            nextTuple_verifyEmitted_action_resetCollectorMock(0, true, true);
+            nextTuple_verifyEmitted_action_resetCollectorMock(0, ACK, Object.class, true);
 
             //Commits offsets during deactivation
             spout.deactivate();
@@ -114,7 +116,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
             //Emit all messages and check that they are emitted. Ack the messages too
             for(int i = 0; i < messageCount; i++) {
-                nextTuple_verifyEmitted_action_resetCollectorMock(i, true, true);
+                nextTuple_verifyEmitted_action_resetCollectorMock(i, ACK, Object.class, true);
             }
 
             commitAndVerifyAllMessagesCommitted(messageCount, 1);

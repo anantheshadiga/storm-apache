@@ -164,7 +164,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
             //Emit all messages and check that they are emitted. Ack the messages too
             for(int i = 0; i < messageCount; i++) {
-                nextTuple_verifyEmitted_action_resetCollectorMock(i, ACK, true, Object.class);
+                nextTuple_verifyEmitted_action_resetCollectorMock(i, ACK, Object.class, true);
             }
 
             commitAndVerifyAllMessagesCommitted(messageCount);
