@@ -25,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.Map;
 
+import static org.apache.storm.kafka.spout.KafkaSpoutAbstractTest.Action.*;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Matchers.anyListOf;
@@ -76,8 +77,8 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
                 spout.nextTuple();
             }
 
-            ArgumentCaptor<KafkaSpoutMessageId> messageIdCaptor = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
-            verify(collector, times(messageCount)).emit(anyString(), anyList(), messageIdCaptor.capture());
+            final ArgumentCaptor<KafkaSpoutMessageId> messageIdCaptor = verifyMessageEmitted(
+                SingleTopicKafkaSpoutConfiguration.STREAM, anyListOf(Object.class), KafkaSpoutMessageId.class, messageCount -1);
 
             List<KafkaSpoutMessageId> messageIds = messageIdCaptor.getAllValues();
             for (int i = 1; i < messageIds.size(); i++) {
@@ -89,10 +90,9 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
             //Advance the time and replay the failed tuple. 
             reset(collector);
-            nextTuple_verifyEmitted_ack_resetCollectorMock()
-            spout.nextTuple();
-            ArgumentCaptor<KafkaSpoutMessageId> failedIdReplayCaptor = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
-            verify(collector).emit(anyString(), anyList(), failedIdReplayCaptor.capture());
+
+            ArgumentCaptor<KafkaSpoutMessageId> failedIdReplayCaptor = nextTuple_verifyEmitted_action_resetCollectorMock(
+                anyString(), anyListOf(Object.class), KafkaSpoutMessageId.class, NONE, false);
 
             assertThat("Expected replay of failed tuple", failedIdReplayCaptor.getValue(), is(failedTuple));
 
@@ -129,10 +129,8 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             prepareSpout(messageCount);
 
             //play 1st tuple
-            ArgumentCaptor<Object> messageIdToDoubleAck = ArgumentCaptor.forClass(Object.class);
-            spout.nextTuple();
-            verify(collector).emit(anyString(), anyList(), messageIdToDoubleAck.capture());
-            spout.ack(messageIdToDoubleAck.getValue());
+            ArgumentCaptor<Object> messageIdToDoubleAck = nextTuple_verifyEmitted_action_resetCollectorMock(
+                anyString(), anyListOf(Object.class), Object.class, ACK, false);
 
             //Emit some more messages
             for(int i = 0; i < messageCount / 2; i++) {
@@ -147,10 +145,9 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             }
 
             //Verify that all messages are emitted, ack all the messages
-            ArgumentCaptor<Object> messageIds = ArgumentCaptor.forClass(Object.class);
-            verify(collector, times(messageCount)).emit(eq(SingleTopicKafkaSpoutConfiguration.STREAM),
-                anyList(),
-                messageIds.capture());
+            ArgumentCaptor<Object> messageIds = verifyMessageEmitted(
+                    SingleTopicKafkaSpoutConfiguration.STREAM, anyListOf(Object.class), Object.class, messageCount);
+
             for(Object id : messageIds.getAllValues()) {
                 spout.ack(id);
             }
@@ -167,7 +164,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
             //Emit all messages and check that they are emitted. Ack the messages too
             for(int i = 0; i < messageCount; i++) {
-                nextTuple_verifyEmitted_ack_resetCollectorMock(i, true, true);
+                nextTuple_verifyEmitted_action_resetCollectorMock(i, ACK, true, Object.class);
             }
 
             commitAndVerifyAllMessagesCommitted(messageCount);
@@ -181,30 +178,22 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             prepareSpout(messageCount);
 
             //play and ack 1 tuple
-            ArgumentCaptor<Object> messageIdAcked = ArgumentCaptor.forClass(Object.class);
-            spout.nextTuple();
-            verify(collector).emit(anyString(), anyList(), messageIdAcked.capture());
-            spout.ack(messageIdAcked.getValue());
-            reset(collector);
+            nextTuple_verifyEmitted_action_resetCollectorMock(
+                anyString(), anyListOf(Object.class), Object.class, ACK, true);
 
             //play and fail 1 tuple
-            ArgumentCaptor<Object> messageIdFailed = ArgumentCaptor.forClass(Object.class);
-            spout.nextTuple();
-            verify(collector).emit(anyString(), anyList(), messageIdFailed.capture());
-            spout.fail(messageIdFailed.getValue());
-            reset(collector);
+            nextTuple_verifyEmitted_action_resetCollectorMock(
+                anyString(), anyListOf(Object.class), Object.class, FAIL, true);
 
             //Emit all remaining messages. Failed tuples retry immediately with current configuration, so no need to wait.
             for(int i = 0; i < messageCount; i++) {
                 spout.nextTuple();
             }
 
-            ArgumentCaptor<Object> remainingMessageIds = ArgumentCaptor.forClass(Object.class);
             //All messages except the first acked message should have been emitted
-            verify(collector, times(messageCount - 1)).emit(
-                eq(SingleTopicKafkaSpoutConfiguration.STREAM),
-                anyList(),
-                remainingMessageIds.capture());
+            ArgumentCaptor<Object> remainingMessageIds = verifyMessageEmitted(
+                    SingleTopicKafkaSpoutConfiguration.STREAM, anyListOf(Object.class), Object.class, messageCount -1);
+
             for(Object id : remainingMessageIds.getAllValues()) {
                 spout.ack(id);
             }
@@ -220,16 +209,12 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             prepareSpout(messageCount);
 
             //play 1st tuple
-            ArgumentCaptor<Object> messageIdToFail = ArgumentCaptor.forClass(Object.class);
-            spout.nextTuple();
-            verify(collector).emit(anyString(), anyList(), messageIdToFail.capture());
-            reset(collector);
+            ArgumentCaptor<Object> messageIdToFail = nextTuple_verifyEmitted_action_resetCollectorMock(
+                anyString(), anyListOf(Object.class), Object.class, NONE, true);
 
             //play 2nd tuple
-            ArgumentCaptor<Object> messageIdToAck = ArgumentCaptor.forClass(Object.class);
-            spout.nextTuple();
-            verify(collector).emit(anyString(), anyList(), messageIdToAck.capture());
-            reset(collector);
+            ArgumentCaptor<Object> messageIdToAck = nextTuple_verifyEmitted_action_resetCollectorMock(
+                anyString(), anyListOf(Object.class), Object.class, NONE, true);
 
             //ack 2nd tuple
             spout.ack(messageIdToAck.getValue());
@@ -241,12 +226,10 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
                 spout.nextTuple();
             }
 
-            ArgumentCaptor<Object> remainingIds = ArgumentCaptor.forClass(Object.class);
             //All messages except the first acked message should have been emitted
-            verify(collector, times(messageCount - 1)).emit(
-                eq(SingleTopicKafkaSpoutConfiguration.STREAM),
-                anyList(),
-                remainingIds.capture());
+            final ArgumentCaptor<Object> remainingIds = verifyMessageEmitted(
+                SingleTopicKafkaSpoutConfiguration.STREAM, anyListOf(Object.class), Object.class, messageCount -1);
+
             for(Object id : remainingIds.getAllValues()) {
                 spout.ack(id);
             }
@@ -257,18 +240,21 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
     @Test
     public void testShouldReplayAllFailedTuplesWhenFailedOutOfOrder() throws Exception {
-        //The spout must reemit retriable tuples, even if they fail out of order.
+        //The spout must re-emit retriable tuples, even if they fail out of order.
         //The spout should be able to skip tuples it has already emitted when retrying messages, even if those tuples are also retries.
-        int messageCount = 10;
+        final int messageCount = 10;
         prepareSpout(messageCount);
 
         //play all tuples
         for (int i = 0; i < messageCount; i++) {
             spout.nextTuple();
         }
-        ArgumentCaptor<KafkaSpoutMessageId> messageIds = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
-        verify(collector, times(messageCount)).emit(anyString(), anyList(), messageIds.capture());
+
+        final ArgumentCaptor<KafkaSpoutMessageId> messageIds =
+            verifyMessageEmitted(anyString(), anyListOf(Object.class), KafkaSpoutMessageId.class, messageCount);
+
         reset(collector);
+
         //Fail tuple 5 and 3, call nextTuple, then fail tuple 2
         List<KafkaSpoutMessageId> capturedMessageIds = messageIds.getAllValues();
         spout.fail(capturedMessageIds.get(5));
@@ -282,11 +268,13 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             spout.nextTuple();
         }
         verify(collector, times(3)).emit(anyString(), anyList(), reemittedMessageIds.capture());
-        Set<KafkaSpoutMessageId> expectedReemitIds = new HashSet<>();
+
+        final Set<KafkaSpoutMessageId> expectedReemitIds = new HashSet<>();
         expectedReemitIds.add(capturedMessageIds.get(5));
         expectedReemitIds.add(capturedMessageIds.get(3));
         expectedReemitIds.add(capturedMessageIds.get(2));
-        assertThat("Expected reemits to be the 3 failed tuples", new HashSet<>(reemittedMessageIds.getAllValues()), is(expectedReemitIds));
+
+        assertThat("Expected re-emits to be the 3 failed tuples", new HashSet<>(reemittedMessageIds.getAllValues()), is(expectedReemitIds));
     }
 
     @Test
@@ -297,14 +285,13 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
         //Emit and fail the same tuple until we've reached retry limit
         for (int i = 0; i <= maxRetries; i++) {
-            nextTuple_verifyEmitted_ack_resetCollectorMock()
-            ArgumentCaptor<KafkaSpoutMessageId> messageIdFailed = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
-            spout.nextTuple();
-            verify(collector).emit(anyString(), anyListOf(Object.class), messageIdFailed.capture());
-            KafkaSpoutMessageId msgId = messageIdFailed.getValue();
-            spout.fail(msgId);
-            assertThat("Expected message id number of failures to match the number of times the message has failed", msgId.numFails(), is(i + 1));
-            reset(collector);
+            final ArgumentCaptor<KafkaSpoutMessageId> messageIdFailed = nextTuple_verifyEmitted_action_resetCollectorMock(
+                    anyString(), anyListOf(Object.class), KafkaSpoutMessageId.class, ACK, true);
+
+            final KafkaSpoutMessageId msgId = messageIdFailed.getValue();
+
+            assertThat("Expected message id number of failures to match the number of times the message has failed",
+                msgId.numFails(), is(i + 1));
         }
 
         //Verify that the tuple is not emitted again
@@ -322,6 +309,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             verify(collector, never()).emit(anyString(), anyList(), any(KafkaSpoutMessageId.class));
 
             SingleTopicKafkaUnitSetupHelper.populateTopicData(kafkaUnitRule.getKafkaUnit(), SingleTopicKafkaSpoutConfiguration.TOPIC, 1);
+
             Time.advanceTime(KafkaSpoutConfig.DEFAULT_PARTITION_REFRESH_PERIOD_MS + KafkaSpout.TIMER_DELAY_MS);
 
             //The new partition should be discovered and the message should be emitted

@@ -100,47 +100,55 @@ public abstract class KafkaSpoutAbstractTest {
      * <ul>
      *     <li>spout.nexTuple()</li>
      *     <li>verify messageId</li>
-     *     <li>spout.ack(msgId)</li>   (if ack param) set to true)
+     *     <li>spout.ack(msgId) or spout.fail(msgId)</li>   (depending on action param)
      *     <li>reset(collector) to be able to reuse mock</li>
      * </ul>
      *
      * @param offset offset of message to be verified
-     * @param ack true to invoke spout.ack(msgId)
-     * @param resetCollector
+     * @param action ACK => spout.ack(msgId), FAIL => spout.fail(msgId)
+     * @param resetCollector resets the collector mock if true
      * @return {@link ArgumentCaptor} of the messageId verified
      */
-    <T> ArgumentCaptor<T> nextTuple_verifyEmitted_ack_resetCollectorMock(
-            int offset, boolean ack, boolean resetCollector, Class<T> type) {
+    <T> ArgumentCaptor<T> nextTuple_verifyEmitted_action_resetCollectorMock(
+            int offset, Action action, boolean resetCollector, Class<T> type) {
 
-        return nextTuple_verifyEmitted_ack_resetCollectorMock(
+        return nextTuple_verifyEmitted_action_resetCollectorMock(
                 SingleTopicKafkaSpoutConfiguration.STREAM,
                 SingleTopicKafkaSpoutConfiguration.TOPIC,
                 offset,
-                ack,
+                action,
                 resetCollector, type);
     }
 
-    <T> ArgumentCaptor<T> nextTuple_verifyEmitted_ack_resetCollectorMock(
-        String stream, String topic, int offset, boolean ack, boolean resetCollector, Class<T> type) {
+    <T> ArgumentCaptor<T> nextTuple_verifyEmitted_action_resetCollectorMock(
+        String stream, String topic, int offset, Action action, boolean resetCollector, Class<T> msgType) {
 
-        return nextTuple_verifyEmitted_ack_resetCollectorMock(
+        return nextTuple_verifyEmitted_action_resetCollectorMock(
             stream,
             new Values(topic, Integer.toString(offset), Integer.toString(offset)),
-            ArgumentCaptor.forClass(type),
-            ack,
+            msgType,
+            action,
             resetCollector);
 
     }
 
-    <T> ArgumentCaptor<T> nextTuple_verifyEmitted_ack_resetCollectorMock(String stream, List<Object> tuple,
-            final ArgumentCaptor<T> messageId, boolean ack, boolean resetCollector) {
+    <T> ArgumentCaptor<T> nextTuple_verifyEmitted_action_resetCollectorMock(
+            String stream, List<Object> tuple, Class<T> msgType, Action action, boolean resetCollector) {
+
+        ArgumentCaptor<T> messageId = ArgumentCaptor.forClass(msgType);
 
         spout.nextTuple();
 
-        verifyMessageEmitted(stream, tuple, messageId);
+        verifyMessageEmitted(stream, tuple, msgType);
 
-        if (ack) {
-            spout.ack(messageId.getValue());
+        // ack, fail or no-op
+        switch (action) {
+            case ACK:
+                spout.ack(messageId.getValue());
+            case FAIL:
+                spout.fail(messageId.getValue());
+            default:
+                break;
         }
 
         if (resetCollector) {
@@ -150,22 +158,35 @@ public abstract class KafkaSpoutAbstractTest {
         return messageId;
     }
 
+    enum Action {
+        ACK,
+        FAIL,
+        NONE
+    }
+
+    // ======================= Verification of message emitted using collector mock =======================
+
     //TODO Clean
     <T> ArgumentCaptor<T> verifyMessageEmitted(int offset, Class<T> type) {
             return verifyMessageEmitted(SingleTopicKafkaSpoutConfiguration.STREAM,
                     SingleTopicKafkaSpoutConfiguration.TOPIC, offset, type);
     }
 
-    <T> ArgumentCaptor<T> verifyMessageEmitted(String stream, String topic, int offset, Class<T> type) {
+    <T> ArgumentCaptor<T> verifyMessageEmitted(String stream, String topic, int offset, Class<T> msgIdType) {
         return verifyMessageEmitted(
                 stream,
                 new Values(topic, Integer.toString(offset), Integer.toString(offset)),
-                ArgumentCaptor.forClass(type));
+                msgIdType);
     }
 
-    // offset and messageId are used interchangeably
-    <T> ArgumentCaptor<T> verifyMessageEmitted(String stream, List<Object> tuple, final ArgumentCaptor<T> messageId) {
-        verify(collector).emit(
+    <T> ArgumentCaptor<T> verifyMessageEmitted(String stream, List<Object> tuple, Class<T> msgIdType) {
+        return verifyMessageEmitted(stream, tuple, msgIdType, 1);
+    }
+
+    <T> ArgumentCaptor<T> verifyMessageEmitted(String stream, List<Object> tuple, Class<T> msgIdType, int times) {
+        final ArgumentCaptor<T> messageId = ArgumentCaptor.forClass(msgIdType);
+
+        verify(collector, times(times)).emit(
             eq(stream),
             eq(tuple),
             messageId.capture());
@@ -178,13 +199,17 @@ public abstract class KafkaSpoutAbstractTest {
     }
 
     void commitAndVerifyAllMessagesCommitted(long msgCount, int numTimes) {
+        commitAndVerifyAllMessagesCommitted(msgCount, numTimes, commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
+    }
+
+    void commitAndVerifyAllMessagesCommitted(long msgCount, int verifyNumTimes, long advanceMs) {
         // reset commit timer such that commit happens on next call to nextTuple()
-        Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
+        Time.advanceTime(advanceMs);
 
         //Commit offsets
         spout.nextTuple();
 
-        verifyAllMessagesCommitted(msgCount, numTimes);
+        verifyAllMessagesCommitted(msgCount, verifyNumTimes);
     }
 
     /*
