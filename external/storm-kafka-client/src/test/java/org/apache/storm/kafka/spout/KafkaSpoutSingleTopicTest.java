@@ -19,12 +19,7 @@ package org.apache.storm.kafka.spout;
 
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.storm.kafka.KafkaUnitRule;
 import org.apache.storm.kafka.spout.builders.SingleTopicKafkaSpoutConfiguration;
-import org.apache.storm.spout.SpoutOutputCollector;
-import org.apache.storm.task.TopologyContext;
-import org.apache.storm.tuple.Values;
-import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -38,23 +33,16 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+
 import org.apache.kafka.common.TopicPartition;
-import org.apache.storm.kafka.spout.internal.KafkaConsumerFactory;
-import org.apache.storm.kafka.spout.internal.KafkaConsumerFactoryDefault;
 import org.apache.storm.utils.Time;
 import org.apache.storm.utils.Time.SimulatedTime;
-import org.junit.Before;
-import org.mockito.Captor;
-import org.mockito.MockitoAnnotations;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyList;
@@ -87,17 +75,21 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
             for (int i = 0; i < messageCount; i++) {
                 spout.nextTuple();
             }
+
             ArgumentCaptor<KafkaSpoutMessageId> messageIdCaptor = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
             verify(collector, times(messageCount)).emit(anyString(), anyList(), messageIdCaptor.capture());
+
             List<KafkaSpoutMessageId> messageIds = messageIdCaptor.getAllValues();
             for (int i = 1; i < messageIds.size(); i++) {
                 spout.ack(messageIds.get(i));
             }
+
             KafkaSpoutMessageId failedTuple = messageIds.get(0);
             spout.fail(failedTuple);
 
             //Advance the time and replay the failed tuple. 
             reset(collector);
+            nextTuple_verifyEmitted_ack_resetCollectorMock()
             spout.nextTuple();
             ArgumentCaptor<KafkaSpoutMessageId> failedIdReplayCaptor = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
             verify(collector).emit(anyString(), anyList(), failedIdReplayCaptor.capture());
@@ -163,11 +155,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
                 spout.ack(id);
             }
 
-            Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
-            //Commit offsets
-            spout.nextTuple();
-
-            verifyAllMessagesCommitted(messageCount);
+            commitAndVerifyAllMessagesCommitted(messageCount);
         }
     }
 
@@ -179,23 +167,10 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
             //Emit all messages and check that they are emitted. Ack the messages too
             for(int i = 0; i < messageCount; i++) {
-                spout.nextTuple();
-                ArgumentCaptor<Object> messageId = ArgumentCaptor.forClass(Object.class);
-                verify(collector).emit(
-                    eq(SingleTopicKafkaSpoutConfiguration.STREAM),
-                    eq(new Values(SingleTopicKafkaSpoutConfiguration.TOPIC,
-                        Integer.toString(i),
-                        Integer.toString(i))),
-                    messageId.capture());
-                spout.ack(messageId.getValue());
-                reset(collector);
+                nextTuple_verifyEmitted_ack_resetCollectorMock(i, true, true);
             }
 
-            Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
-            //Commit offsets
-            spout.nextTuple();
-
-            verifyAllMessagesCommitted(messageCount);
+            commitAndVerifyAllMessagesCommitted(messageCount);
         }
     }
 
@@ -234,11 +209,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
                 spout.ack(id);
             }
 
-            Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
-            //Commit offsets
-            spout.nextTuple();
-
-            verifyAllMessagesCommitted(messageCount);
+            commitAndVerifyAllMessagesCommitted(messageCount);
         }
     }
 
@@ -280,11 +251,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
                 spout.ack(id);
             }
 
-            Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
-            //Commit offsets
-            spout.nextTuple();
-
-            verifyAllMessagesCommitted(messageCount);
+            commitAndVerifyAllMessagesCommitted(messageCount);
         }
     }
 
