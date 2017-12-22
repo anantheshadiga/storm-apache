@@ -297,6 +297,7 @@ public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
 
         //Emit and fail the same tuple until we've reached retry limit
         for (int i = 0; i <= maxRetries; i++) {
+            nextTuple_verifyEmitted_ack_resetCollectorMock()
             ArgumentCaptor<KafkaSpoutMessageId> messageIdFailed = ArgumentCaptor.forClass(KafkaSpoutMessageId.class);
             spout.nextTuple();
             verify(collector).emit(anyString(), anyListOf(Object.class), messageIdFailed.capture());

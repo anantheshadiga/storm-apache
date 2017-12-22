@@ -48,7 +48,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             final int messageCount = 2;
             prepareSpout(messageCount);
 
-            nextTuple_verifyEmitted_ack_resetCollectorMock(0, true, true);
+            nextTuple_verifyEmitted_ack_resetCollectorMock(0, true, true, Object.class);
 
             doNothing().when(consumerSpy).close();
 
