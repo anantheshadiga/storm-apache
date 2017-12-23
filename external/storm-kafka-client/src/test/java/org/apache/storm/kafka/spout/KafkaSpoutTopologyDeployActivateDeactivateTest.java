@@ -42,7 +42,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         final int messageCount = 2;
         prepareSpout(messageCount);
 
-        nextTuple_verifyEmitted_ack_resetCollectorMock(0);
+        nextTuple_verifyEmitted_ack_resetCollector(0);
 
         doNothing().when(consumerSpy).close();
 
@@ -53,9 +53,9 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
         spout.activate();
 
-        nextTuple_verifyEmitted_ack_resetCollectorMock(1);
+        nextTuple_verifyEmitted_ack_resetCollector(1);
 
-        commitAndVerifyMessagesCommitted(messageCount);
+        commitAndVerifyAllMessagesCommitted(messageCount);
     }
 
     @Test
@@ -65,7 +65,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         final int messageCount = 2;
         prepareSpout(messageCount);
 
-        nextTuple_verifyEmitted_ack_resetCollectorMock(0);
+        nextTuple_verifyEmitted_ack_resetCollector(0);
 
         //Commits offsets during deactivation
         spout.deactivate();
@@ -77,9 +77,9 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         // Initialize spout using the same populated data (i.e same kafkaUnitRule)
         SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
 
-        nextTuple_verifyEmitted_ack_resetCollectorMock(1);
+        nextTuple_verifyEmitted_ack_resetCollector(1);
 
-        commitAndVerifyMessagesCommitted(messageCount);
+        commitAndVerifyAllMessagesCommitted(messageCount);
     }
 
     @Test
@@ -89,7 +89,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         final int messageCount = 2;
         prepareSpout(messageCount);
 
-        nextTuple_verifyEmitted_ack_resetCollectorMock(0);
+        nextTuple_verifyEmitted_ack_resetCollector(0);
 
         //Commits offsets during deactivation
         spout.deactivate();
@@ -104,9 +104,9 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
         //Emit all messages and check that they are emitted. Ack the messages too
         for (int i = 0; i < messageCount; i++) {
-            nextTuple_verifyEmitted_ack_resetCollectorMock(i);
+            nextTuple_verifyEmitted_ack_resetCollector(i);
         }
 
-        commitAndVerifyMessagesCommitted(messageCount);
+        commitAndVerifyAllMessagesCommitted(messageCount);
     }
 }

@@ -108,7 +108,7 @@ public abstract class KafkaSpoutAbstractTest {
      * @param offset offset of message to be verified
      * @return {@link ArgumentCaptor} of the messageId verified
      */
-    ArgumentCaptor<Object> nextTuple_verifyEmitted_ack_resetCollectorMock(int offset) {
+    ArgumentCaptor<Object> nextTuple_verifyEmitted_ack_resetCollector(int offset) {
         spout.nextTuple();
 
         ArgumentCaptor<Object> messageId = verifyMessageEmitted(offset);
@@ -134,7 +134,7 @@ public abstract class KafkaSpoutAbstractTest {
         return messageId;
     }
 
-    void commitAndVerifyMessagesCommitted(long msgCount) {
+    void commitAndVerifyAllMessagesCommitted(long msgCount) {
         // reset commit timer such that commit happens on next call to nextTuple()
         Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
 
