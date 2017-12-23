@@ -18,9 +18,7 @@
 
 package org.apache.storm.kafka.spout;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.storm.kafka.spout.builders.SingleTopicKafkaSpoutConfiguration;
-import org.apache.storm.utils.Time;
 import org.junit.Test;
 
 import java.util.regex.Pattern;
@@ -41,80 +39,74 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
     @Test
     public void test_FirstPollStrategy_Earliest_NotEnforced_OnTopologyActivateDeactivate() throws Exception {
-        try (Time.SimulatedTime simulatedTime = new Time.SimulatedTime()) {
-            final int messageCount = 2;
-            prepareSpout(messageCount);
+        final int messageCount = 2;
+        prepareSpout(messageCount);
 
-            nextTuple_verifyEmitted_ack_resetCollectorMock(0);
+        nextTuple_verifyEmitted_ack_resetCollectorMock(0);
 
-            doNothing().when(consumerSpy).close();
+        doNothing().when(consumerSpy).close();
 
-            //Commits offsets during deactivation
-            spout.deactivate();
+        //Commits offsets during deactivation
+        spout.deactivate();
 
-            verifyAllMessagesCommitted(1, 1);
+        verifyAllMessagesCommitted(1, 1);
 
-            spout.activate();
+        spout.activate();
 
-            nextTuple_verifyEmitted_ack_resetCollectorMock(1);
+        nextTuple_verifyEmitted_ack_resetCollectorMock(1);
 
-            commitAndVerifyMessagesCommitted(messageCount, 2);
-        }
+        commitAndVerifyMessagesCommitted(messageCount, 2);
     }
 
     @Test
     public void test_FirstPollStrategy_Earliest_NotEnforced_OnPartitionReassignment() throws Exception {
-        try (Time.SimulatedTime simulatedTime = new Time.SimulatedTime()) {
-            when(topologyContext.getStormId()).thenReturn("topology-1");
-            
-            final int messageCount = 2;
-            prepareSpout(messageCount);
+        when(topologyContext.getStormId()).thenReturn("topology-1");
 
-            nextTuple_verifyEmitted_ack_resetCollectorMock(0);
+        final int messageCount = 2;
+        prepareSpout(messageCount);
 
-            //Commits offsets during deactivation
-            spout.deactivate();
+        nextTuple_verifyEmitted_ack_resetCollectorMock(0);
 
-            verifyAllMessagesCommitted(1, 1);
+        //Commits offsets during deactivation
+        spout.deactivate();
 
-            // Restart topology with the same topology id, which mimics the behavior of partition reassignment
-            setUp();
-            // Initialize spout using the same populated data (i.e same kafkaUnitRule)
-            SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
+        verifyAllMessagesCommitted(1, 1);
 
-            nextTuple_verifyEmitted_ack_resetCollectorMock(1);
+        // Restart topology with the same topology id, which mimics the behavior of partition reassignment
+        setUp();
+        // Initialize spout using the same populated data (i.e same kafkaUnitRule)
+        SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
 
-            commitAndVerifyMessagesCommitted(messageCount, 1);
-        }
+        nextTuple_verifyEmitted_ack_resetCollectorMock(1);
+
+        commitAndVerifyMessagesCommitted(messageCount, 1);
     }
 
     @Test
     public void test_FirstPollStrategy_Earliest_Enforced_OnlyOnTopologyDeployment() throws Exception {
-        try (Time.SimulatedTime simulatedTime = new Time.SimulatedTime()) {
-            when(topologyContext.getStormId()).thenReturn("topology-1");
+        when(topologyContext.getStormId()).thenReturn("topology-1");
 
-            final int messageCount = 2;
-            prepareSpout(messageCount);
+        final int messageCount = 2;
+        prepareSpout(messageCount);
 
-            nextTuple_verifyEmitted_ack_resetCollectorMock(0);
+        nextTuple_verifyEmitted_ack_resetCollectorMock(0);
 
-            //Commits offsets during deactivation
-            spout.deactivate();
+        //Commits offsets during deactivation
+        spout.deactivate();
 
-            verifyAllMessagesCommitted(1, 1);
+        verifyAllMessagesCommitted(1, 1);
 
-            // Restart topology with a different topology id
-            setUp();
-            when(topologyContext.getStormId()).thenReturn("topology-2");
-            // Initialize spout using the same populated data (i.e same kafkaUnitRule)
-            SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
+        // Restart topology with a different topology id
+        setUp();
+        when(topologyContext.getStormId()).thenReturn("topology-2");
+        // Initialize spout using the same populated data (i.e same kafkaUnitRule)
+        SingleTopicKafkaUnitSetupHelper.initializeSpout(spout, conf, topologyContext, collector);
 
-            //Emit all messages and check that they are emitted. Ack the messages too
-            for(int i = 0; i < messageCount; i++) {
-                nextTuple_verifyEmitted_ack_resetCollectorMock(i);
-            }
-
-            commitAndVerifyMessagesCommitted(messageCount, 1);
+        //Emit all messages and check that they are emitted. Ack the messages too
+        for (int i = 0; i < messageCount; i++) {
+            nextTuple_verifyEmitted_ack_resetCollectorMock(i);
         }
+
+        commitAndVerifyMessagesCommitted(messageCount, 1);
     }
 }

@@ -29,6 +29,7 @@ import org.apache.storm.spout.SpoutOutputCollector;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.tuple.Values;
 import org.apache.storm.utils.Time;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.mockito.ArgumentCaptor;
@@ -51,9 +52,6 @@ public abstract class KafkaSpoutAbstractTest {
     @Rule
     public KafkaUnitRule kafkaUnitRule = new KafkaUnitRule();
 
-    @Captor
-    private ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
-
     final TopologyContext topologyContext = mock(TopologyContext.class);
     final Map<String, Object> conf = new HashMap<>();
     final SpoutOutputCollector collector = mock(SpoutOutputCollector.class);
@@ -61,6 +59,10 @@ public abstract class KafkaSpoutAbstractTest {
 
     KafkaConsumer<String, String> consumerSpy;
     KafkaSpout<String, String> spout;
+
+    @Captor
+    private ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
+    private Time.SimulatedTime simulatedTime;
 
     @Before
     public void setUp() {
@@ -79,8 +81,14 @@ public abstract class KafkaSpoutAbstractTest {
         };
 
         spout = new KafkaSpout<>(spoutConfig, consumerFactory);
+
+        simulatedTime = new Time.SimulatedTime();
     }
 
+    @After
+    public void tearDown() throws Exception {
+        simulatedTime.close();
+    }
 
     abstract KafkaSpoutConfig<String, String> createSpoutConfig();
 
