@@ -49,13 +49,13 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         //Commits offsets during deactivation
         spout.deactivate();
 
-        verifyAllMessagesCommitted(1, 1);
+        verifyAllMessagesCommitted(1);
 
         spout.activate();
 
         nextTuple_verifyEmitted_ack_resetCollectorMock(1);
 
-        commitAndVerifyMessagesCommitted(messageCount, 2);
+        commitAndVerifyMessagesCommitted(messageCount);
     }
 
     @Test
@@ -70,7 +70,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         //Commits offsets during deactivation
         spout.deactivate();
 
-        verifyAllMessagesCommitted(1, 1);
+        verifyAllMessagesCommitted(1);
 
         // Restart topology with the same topology id, which mimics the behavior of partition reassignment
         setUp();
@@ -79,7 +79,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
         nextTuple_verifyEmitted_ack_resetCollectorMock(1);
 
-        commitAndVerifyMessagesCommitted(messageCount, 1);
+        commitAndVerifyMessagesCommitted(messageCount);
     }
 
     @Test
@@ -94,7 +94,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
         //Commits offsets during deactivation
         spout.deactivate();
 
-        verifyAllMessagesCommitted(1, 1);
+        verifyAllMessagesCommitted(1);
 
         // Restart topology with a different topology id
         setUp();
@@ -107,6 +107,6 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             nextTuple_verifyEmitted_ack_resetCollectorMock(i);
         }
 
-        commitAndVerifyMessagesCommitted(messageCount, 1);
+        commitAndVerifyMessagesCommitted(messageCount);
     }
 }

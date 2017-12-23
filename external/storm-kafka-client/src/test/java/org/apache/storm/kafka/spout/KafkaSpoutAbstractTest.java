@@ -45,7 +45,6 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 public abstract class KafkaSpoutAbstractTest {
@@ -135,14 +134,14 @@ public abstract class KafkaSpoutAbstractTest {
         return messageId;
     }
 
-    void commitAndVerifyMessagesCommitted(long msgCount, int numTimes) {
+    void commitAndVerifyMessagesCommitted(long msgCount) {
         // reset commit timer such that commit happens on next call to nextTuple()
         Time.advanceTime(commitOffsetPeriodMs + KafkaSpout.TIMER_DELAY_MS);
 
         //Commit offsets
         spout.nextTuple();
 
-        verifyAllMessagesCommitted(msgCount,numTimes);
+        verifyAllMessagesCommitted(msgCount);
     }
 
     /*
@@ -151,16 +150,14 @@ public abstract class KafkaSpoutAbstractTest {
      * and that the committed offset covers messageCount messages
      */
     void verifyAllMessagesCommitted(long messageCount) {
-        verifyAllMessagesCommitted(messageCount, 1);
-    }
-
-    void verifyAllMessagesCommitted(long messageCount, int numTimes) {
-        verify(consumerSpy, times(numTimes)).commitSync(commitCapture.capture());
+        verify(consumerSpy).commitSync(commitCapture.capture());
 
         final Map<TopicPartition, OffsetAndMetadata> commits = commitCapture.getValue();
         assertThat("Expected commits for only one topic partition", commits.entrySet().size(), is(1));
 
         OffsetAndMetadata offset = commits.entrySet().iterator().next().getValue();
         assertThat("Expected committed offset to cover all emitted messages", offset.offset(), is(messageCount));
+
+        reset(consumerSpy);
     }
 }
