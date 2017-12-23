@@ -16,11 +16,14 @@
 
 package org.apache.storm.kafka.spout.internal;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.TreeSet;
+
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.storm.kafka.spout.KafkaSpoutMessageId;
@@ -206,7 +209,8 @@ public class OffsetManager {
     public boolean contains(KafkaSpoutMessageId msgId) {
         return ackedMsgs.contains(msgId);
     }
-    
+
+    @VisibleForTesting
     boolean containsEmitted(long offset) {
         return emittedOffsets.contains(offset);
     }

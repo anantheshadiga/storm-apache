@@ -23,7 +23,6 @@ import org.junit.Test;
 
 import java.util.regex.Pattern;
 
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
 public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAbstractTest {
@@ -44,12 +43,12 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
 
         nextTuple_verifyEmitted_ack_resetCollector(0);
 
-        doNothing().when(consumerSpy).close();
-
         //Commits offsets during deactivation
         spout.deactivate();
 
         verifyAllMessagesCommitted(1);
+
+        consumerSpy = createConsumerSpy();
 
         spout.activate();
 

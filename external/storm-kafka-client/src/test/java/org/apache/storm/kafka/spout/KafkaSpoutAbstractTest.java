@@ -62,26 +62,34 @@ public abstract class KafkaSpoutAbstractTest {
     @Captor
     private ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
     private Time.SimulatedTime simulatedTime;
+    private KafkaSpoutConfig<String, String> spoutConfig;
 
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        final KafkaSpoutConfig<String, String> spoutConfig = createSpoutConfig();
+        spoutConfig = createSpoutConfig();
 
-        consumerSpy = spy(new KafkaConsumerFactoryDefault<String, String>().createConsumer(spoutConfig));
+        consumerSpy = createConsumerSpy();
 
-        final KafkaConsumerFactory<String, String>  consumerFactory = new KafkaConsumerFactory<String, String>() {
+        spout = new KafkaSpout<>(spoutConfig, createConsumerFactory());
+
+        simulatedTime = new Time.SimulatedTime();
+    }
+
+    private KafkaConsumerFactory<String, String> createConsumerFactory() {
+
+        return new KafkaConsumerFactory<String, String>() {
             @Override
             public KafkaConsumer<String, String> createConsumer(KafkaSpoutConfig<String, String> kafkaSpoutConfig) {
                 return consumerSpy;
             }
 
         };
+    }
 
-        spout = new KafkaSpout<>(spoutConfig, consumerFactory);
-
-        simulatedTime = new Time.SimulatedTime();
+    KafkaConsumer<String, String> createConsumerSpy() {
+        return spy(new KafkaConsumerFactoryDefault<String, String>().createConsumer(spoutConfig));
     }
 
     @After
