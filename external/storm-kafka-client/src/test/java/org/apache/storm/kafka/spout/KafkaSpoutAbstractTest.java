@@ -52,17 +52,15 @@ public abstract class KafkaSpoutAbstractTest {
     public KafkaUnitRule kafkaUnitRule = new KafkaUnitRule();
 
     @Captor
-    ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
+    private ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
 
     final TopologyContext topologyContext = mock(TopologyContext.class);
     final Map<String, Object> conf = new HashMap<>();
     final SpoutOutputCollector collector = mock(SpoutOutputCollector.class);
     final long commitOffsetPeriodMs = 2_000;
-    final int maxRetries = 3;
+
     KafkaConsumer<String, String> consumerSpy;
-    KafkaConsumerFactory<String, String> consumerFactory;
     KafkaSpout<String, String> spout;
-    final int maxPollRecords = 10;
 
     @Before
     public void setUp() {
@@ -72,7 +70,7 @@ public abstract class KafkaSpoutAbstractTest {
 
         consumerSpy = spy(new KafkaConsumerFactoryDefault<String, String>().createConsumer(spoutConfig));
 
-        consumerFactory = new KafkaConsumerFactory<String, String>() {
+        final KafkaConsumerFactory<String, String>  consumerFactory = new KafkaConsumerFactory<String, String>() {
             @Override
             public KafkaConsumer<String, String> createConsumer(KafkaSpoutConfig<String, String> kafkaSpoutConfig) {
                 return consumerSpy;
@@ -116,14 +114,14 @@ public abstract class KafkaSpoutAbstractTest {
     }
 
     // offset and messageId are used interchangeably
-    ArgumentCaptor<Object> verifyMessageEmitted(int offest) {
+    ArgumentCaptor<Object> verifyMessageEmitted(int offset) {
         final ArgumentCaptor<Object> messageId = ArgumentCaptor.forClass(Object.class);
 
         verify(collector).emit(
             eq(SingleTopicKafkaSpoutConfiguration.STREAM),
             eq(new Values(SingleTopicKafkaSpoutConfiguration.TOPIC,
-                Integer.toString(offest),
-                Integer.toString(offest))),
+                Integer.toString(offset),
+                Integer.toString(offset))),
             messageId.capture());
 
         return messageId;

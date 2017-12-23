@@ -65,6 +65,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.hamcrest.Matchers;
 
 public class KafkaSpoutSingleTopicTest extends KafkaSpoutAbstractTest {
+    @Captor
+    private ArgumentCaptor<Map<TopicPartition, OffsetAndMetadata>> commitCapture;
+    private final int maxPollRecords = 10;
+    private final int maxRetries = 3;
+
     @Override
     KafkaSpoutConfig<String, String> createSpoutConfig() {
         return SingleTopicKafkaSpoutConfiguration.setCommonSpoutConfig(

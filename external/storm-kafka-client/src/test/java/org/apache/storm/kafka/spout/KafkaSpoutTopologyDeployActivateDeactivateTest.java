@@ -35,10 +35,7 @@ public class KafkaSpoutTopologyDeployActivateDeactivateTest extends KafkaSpoutAb
             KafkaSpoutConfig.builder("127.0.0.1:" + kafkaUnitRule.getKafkaUnit().getKafkaPort(),
                 Pattern.compile(SingleTopicKafkaSpoutConfiguration.TOPIC)))
             .setOffsetCommitPeriodMs(commitOffsetPeriodMs)
-            .setRetry(new KafkaSpoutRetryExponentialBackoff(KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0), KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0),
-                maxRetries, KafkaSpoutRetryExponentialBackoff.TimeInterval.seconds(0)))
             .setFirstPollOffsetStrategy(KafkaSpoutConfig.FirstPollOffsetStrategy.EARLIEST)
-            .setProp(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords)
             .build();
     }
 
